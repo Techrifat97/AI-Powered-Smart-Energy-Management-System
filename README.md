@@ -7,7 +7,7 @@ AI-driven energy monitoring, analysis and sustainability coaching for buildings.
 | Member | Subsystem | Django app | Implemented classes |
 |---|---|---|---|
 | Shaon | S1 Energy Monitoring & Analysis | `backend/monitoring` | Building, Meter, EnergyReading |
-| Yassoub | S2 Sustainability & AI Coach | `backend/coach` | TODO |
+| Yassoub | S2 Sustainability & AI Coach | `backend/coach` | AIRecommendation, RecommendationFeedback, LLMRequestLog |
 | Marwan | S3 Web Dashboard & Alerts | `backend/accounts` | User, UserPreferences, Notification |
 
 ## System Design
@@ -41,4 +41,5 @@ frontend/                React app
 
 ```
 python -m unittest discover -s backend/accounts/tests -t .
+python -m unittest discover -s backend/coach/tests -t .
 ```
