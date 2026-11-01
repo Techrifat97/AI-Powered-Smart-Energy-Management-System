@@ -8,6 +8,7 @@ class Building:
         self.floor_area_m2 = floor_area_m2
         self.building_type = building_type
         self.created_at = datetime.now()
+        self.meters = []
         
     def get_name(self):
         return self.name
@@ -20,12 +21,14 @@ class Building:
     
     def set_address(self, new_address):
         self.address = new_address
+        
+    def add_meter(self, meter):
+        self.meters.append(meter)
 
-building1 = Building(1, "FH Dortmund", "Dortmund", 2500.0, "University")
-
-print(building1.get_name())
-print(building1.get_address())
-
-building1.set_name('Smart Energy Building')
-
-print(building1.get_name())
+    def active_meters(self):
+        active_list = []
+        for meter in self.meters:
+            if meter.is_active:
+                active_list.append(meter)
+                         
+        return active_list
