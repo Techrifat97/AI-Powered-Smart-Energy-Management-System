@@ -55,3 +55,4 @@ class RecommendationFeedback:
     def is_positive(self):
         """Returns True if the rating is 4 or 5, otherwise False."""
         return self.rating >= RecommendationFeedback.POSITIVE_THRESHOLD
+

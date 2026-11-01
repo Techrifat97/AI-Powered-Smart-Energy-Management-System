@@ -155,3 +155,4 @@ class AIRecommendation:
     def is_actionable(self):
         """Checks if the recommendation is currently pending action."""
         return self.status in ("NEW", "ACCEPTED")
+
