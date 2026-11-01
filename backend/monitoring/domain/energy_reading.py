@@ -1,17 +1,22 @@
 
-from datetime import datetime, timezone
-from decimal import Decimal
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+from math import isfinite
 
 
 class EnergyReading:
     def __init__(self, reading_id, timestamp, consumption_kwh,
                  power_kw, source, is_valid=True):
+        if not isinstance(timestamp, datetime):
+            raise TypeError("Timestamp must be a datetime object")
+        if not isinstance(is_valid, bool):
+            raise ValueError("Reading validity must be True or False")
 
         self.id = reading_id
         self.timestamp = timestamp
-        self.consumption_kwh = Decimal(str(consumption_kwh))
-        self.power_kw = float(power_kw)
-        self.source = source
+        self.set_consumption(consumption_kwh)
+        self.set_power(power_kw)
+        self.set_source(source)
         self.is_valid = is_valid
 
     def get_timestamp(self):
@@ -27,12 +32,19 @@ class EnergyReading:
         return self.source
 
     def set_consumption(self, new_consumption):
-        if Decimal(str(new_consumption)) < 0:
-            raise ValueError("Consumption cannot be negative")
-        self.consumption_kwh = Decimal(str(new_consumption))
+        try:
+            consumption = Decimal(str(new_consumption))
+        except InvalidOperation:
+            raise ValueError("Consumption must be a number")
+        if not consumption.is_finite() or consumption < 0:
+            raise ValueError("Consumption must be finite and nonnegative")
+        self.consumption_kwh = consumption
 
     def set_power(self, new_power):
-        self.power_kw = float(new_power)
+        power = float(new_power)
+        if not isfinite(power):
+            raise ValueError("Power must be finite")
+        self.power_kw = power
 
     def set_source(self, new_source):
         if new_source not in ("SIMULATED", "MANUAL"):
@@ -48,15 +60,3 @@ class EnergyReading:
             "source": self.source,
             "is_valid": self.is_valid
         }
-
-
-if __name__ == "__main__":
-    reading1 = EnergyReading(
-        1,
-        datetime.now(timezone.utc),
-        1.42,
-        85.2,
-        "SIMULATED"
-    )
-
-    print(reading1.to_dict())
