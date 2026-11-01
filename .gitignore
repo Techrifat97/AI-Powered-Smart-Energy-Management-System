@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.coverage
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# React / Node.js
+node_modules/
+dist/
+build/
+
+# IDE
+.idea/
