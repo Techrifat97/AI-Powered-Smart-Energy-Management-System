@@ -58,11 +58,17 @@ class LLMRequestLogTests(unittest.TestCase):
         self.assertEqual(self.log.get_status(), "PENDING")
         self.assertIsNotNone(self.log.get_created_at())
 
-    def test_record_with_positional_arguments(self):
+    def test_record_with_arguments(self):
+        # Keyword arguments
         self.log.record(tokens_used=240, latency_ms=450, status="SUCCESS")
         self.assertEqual(self.log.get_tokens_used(), 240)
         self.assertEqual(self.log.get_latency_ms(), 450)
         self.assertEqual(self.log.get_status(), "SUCCESS")
+
+        # Positional arguments
+        self.log.record(300, 500, "SUCCESS")
+        self.assertEqual(self.log.get_tokens_used(), 300)
+        self.assertEqual(self.log.get_latency_ms(), 500)
 
     def test_record_with_dict(self):
         self.log.record({"tokens_used": 180, "latency_ms": 310, "status": "SUCCESS"})

@@ -76,21 +76,25 @@ class LLMRequestLog:
         self.status = upper_status
 
     # --- Domain Methods ---
-    def record(self, response_or_tokens, latency_ms=None, status="SUCCESS"):
+    def record(self, response=None, tokens_used=None, latency_ms=None, status="SUCCESS"):
         """
         Records the completion metrics for this LLM request.
-        Supports passing either a dictionary (e.g. {'tokens_used': 150, 'latency_ms': 320, 'status': 'SUCCESS'})
-        or positional arguments (tokens_used, latency_ms, status).
+        Supports:
+          - A dictionary response: record({"tokens_used": 150, "latency_ms": 320, "status": "SUCCESS"})
+          - Positional arguments: record(150, 320, "SUCCESS")
+          - Keyword arguments: record(tokens_used=150, latency_ms=320, status="SUCCESS")
         """
-        if isinstance(response_or_tokens, dict):
-            tokens = response_or_tokens.get("tokens_used", 0)
-            latency = response_or_tokens.get("latency_ms", 0)
-            resp_status = response_or_tokens.get("status", "SUCCESS")
+        if isinstance(response, dict):
+            tokens = response.get("tokens_used", 0)
+            latency = response.get("latency_ms", 0)
+            resp_status = response.get("status", "SUCCESS")
             self.set_tokens_used(tokens)
             self.set_latency_ms(latency)
             self.set_status(resp_status)
         else:
-            self.set_tokens_used(response_or_tokens)
+            resolved_tokens = response if response is not None else tokens_used
+            if resolved_tokens is not None:
+                self.set_tokens_used(resolved_tokens)
             if latency_ms is not None:
                 self.set_latency_ms(latency_ms)
             self.set_status(status)
