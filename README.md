@@ -1,101 +1,129 @@
 # AI-Powered Smart Energy Management System
 
-This is our Capstone project for the Compact Programming course at FH Dortmund. We are developing a system that monitors energy consumption in buildings, analyzes energy usage, and provides recommendations to help reduce energy waste.
+**Hometask 2 — Real-Time Data Processing**
 
-For Home Assignment 1, we focused on the object-oriented programming part of the project. Each team member implemented three Python classes from their subsystem using constructors, attributes, getters, setters, and basic methods.
+This is our Capstone project for the Compact Programming course at FH Dortmund. Our goal is to monitor energy use in buildings and process smart-meter data for analysis and sustainability recommendations.
 
-## Team Members
+For Hometask 2, we are building one shared streaming framework in Python. It will simulate incoming readings from HVAC, solar and battery meters, filter out readings we do not need, and transform the remaining data into useful energy information.
 
-| Member | Subsystem | Python Classes |
-| ------- | --------------------------------- | ------------------------------------------------------- |
-| Shaon | S1 — Energy Monitoring & Analysis | Building, Meter, EnergyReading |
-| Yassoub | S2 — Sustainability & AI Coach | AIRecommendation, RecommendationFeedback, LLMRequestLog |
-| Marwan | S3 — Web Dashboard & Alerts | User, UserPreferences, Notification |
+## Team Members and Responsibilities
 
-## Our Implementation
+| Member | Classes | Responsibility | Progress |
+|---|---|---|---|
+| Shaon | `MeterReadingStream`, `TelemetryGenerator` | Generate meter readings and consume them using iterators and generators | Implemented |
+| Yassoub | `StreamProcessor`, `MeterFilter` | Define an abstract processing interface and filter inactive or low-power readings | In progress |
+| Marwan | `EnergyTransformer`, `PeakTariffProcessor`, `StreamPipeline` | Transform readings and connect the processing stages into one pipeline | In progress |
 
-We divided the project into three subsystems so that each member could work on their own part.
+The classes will work together as a single pipeline, rather than as three separate applications.
 
-**S1 — Energy Monitoring & Analysis**
+## How Our Streaming Pipeline Works
 
-This part handles building information, energy meters, and energy readings. The `Building` class manages the meters in a building, while the `Meter` class stores readings and keeps track of whether a meter is active. The `EnergyReading` class represents an individual energy measurement.
+Our planned data flow is:
 
-**S2 — Sustainability & AI Coach**
+```text
+Smart meter events (HVAC / SOLAR / BATTERY)
+        |
+        v
+TelemetryGenerator
+        |
+        v
+MeterReadingStream
+        |
+        v
+MeterFilter
+        |
+        v
+EnergyTransformer
+        |
+        v
+PeakTariffProcessor
+        |
+        v
+Processed energy events
+```
 
-This part is responsible for energy-saving recommendations. It includes classes for storing recommendations, collecting user feedback, and keeping records of AI model requests.
+The source part is implemented. The filter, transformations and full pipeline will be connected after the other components are ready.
 
-**S3 — Web Dashboard & Alerts**
+We are using the following Python concepts in this assignment:
 
-This part manages users, their dashboard preferences, and notifications. Users can update their preferences and receive notifications related to the system.
+- **Abstract Base Classes:** a common `StreamProcessor` interface using `ABC` and `@abstractmethod`
+- **Inheritance and polymorphism:** different processors with the same `process(event)` method
+- **Operator overloading:** using `__or__()` to connect processing stages
+- **Iterators:** using `__iter__()` and `__next__()` to consume events one at a time
+- **Generators:** using `yield` to produce simulated readings
 
-## UML Class Diagrams
+## Shared Event Format
 
-We created UML class diagrams for each subsystem to show the class structure and relationships. The diagrams also include some classes that we plan to implement later in the Capstone project.
+The streaming components use Python dictionaries. A generated reading looks like this:
 
-### S1 — Energy Monitoring
+```python
+{
+    "meter_id": 1,
+    "category": "HVAC",
+    "is_active": True,
+    "power_kw": 2.5,
+    "consumption_kwh": 1.2,
+    "timestamp": "2026-11-02T21:58:16+00:00"
+}
+```
 
-![S1 class diagram](docs/uml/s1-monitoring.png)
+The generator produces readings for both active and inactive meters. Filtering happens later in the pipeline. We use `power_kw` for threshold filtering and `consumption_kwh` for energy-related calculations.
 
-### S2 — Sustainability & AI Coach
+## Current Implementation
 
-![S2 class diagram](docs/uml/s2-coach.png)
+### MeterReadingStream
 
-### S3 — Web Dashboard & Alerts
+This class takes a list or generator of events and returns them one at a time. It implements `__iter__()` and `__next__()`.
 
-![S3 class diagram](docs/uml/s3-accounts.png)
+### TelemetryGenerator
+
+This class uses `yield` to generate simulated readings. We can set the number of cycles and the time interval between cycles.
+
+Our current demo uses **10 meters and 5 cycles**, so it generates **50 events**. The simulation waits one second between cycles. It does not connect to physical IoT devices yet.
 
 ## Project Structure
 
-Our Python classes are organized into separate folders for each subsystem.
+The Hometask 2 source files currently available are:
 
 ```text
 backend/
-    monitoring/
-        domain/
+    streaming/
+        __init__.py
+        source.py
         tests/
-    coach/
-        domain/
-        tests/
-    accounts/
-        domain/
-        tests/
-
-docs/
-    uml/
+            test_source.py
 ```
 
-The `domain` folders contain our Python classes, and the `tests` folders contain the test files.
+The repository also contains the domain classes from Hometask 1. Additional streaming processor files will be added as the team completes them.
 
-## Running the Tests
+## Run the Demo
 
-We used Python's built-in `unittest` module to test our classes.
-
-Run these commands from the main project folder:
-
-**S1 — Energy Monitoring**
+From the project root, run:
 
 ```bash
-python3 -m unittest discover -s backend/monitoring/tests -v
+python3 -m backend.streaming.source
 ```
 
-**S2 — Sustainability & AI Coach**
+This prints the simulated meter events as they are generated.
+
+## Run the Tests
+
+We use Python's built-in `unittest` framework.
 
 ```bash
-python3 -m unittest discover -s backend/coach/tests -v
+python3 -m unittest discover -s backend/streaming/tests -v
 ```
 
-**S3 — Web Dashboard & Alerts**
+The current source implementation has **5 passing tests** covering normal iteration, empty streams, event generation, multiple cycles and 50 generated events. We will add more tests when the other processing components are integrated.
 
-```bash
-python3 -m unittest discover -s backend/accounts/tests -v
-```
+## UML Class Diagram
 
-## Video Presentation
+The final streaming UML class diagram will be added here after the shared processor interfaces and class relationships are verified against the completed code.
 
-We will add our group presentation video here before the final submission.
+## Team Video Presentation
 
-**Video link:** To be added.
+**Video link:** To be added before submission.
 
-## Next Steps
+## Remaining Work
 
-Home Assignment 1 covers the basic OOP implementation. We will continue developing the project by adding data streaming, database integration, APIs, AI recommendations, and a React dashboard in the next stages.
+We still need to integrate the meter filter, energy transformations and pipeline composition; test the complete event flow; add the final UML class diagram; and include our five-minute team presentation link.
