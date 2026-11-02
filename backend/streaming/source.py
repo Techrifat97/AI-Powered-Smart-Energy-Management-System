@@ -1,41 +1,40 @@
 from datetime import datetime, timezone
 import random
+import time
 
 class MeterReadingStream:
     def __init__(self, events):
-        self.events = events
-        self.index = 0
+        self.events = iter(events)
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        if self.index >= len(self.events):
-            raise StopIteration
+        return next(self.events)
 
-        event = self.events[self.index]
-        self.index += 1
-
-        return event
-    
 
 class TelemetryGenerator:
     def __init__(self, meters):
         self.meters = meters
 
-    def generate(self):
-        for meter in self.meters:
-            reading = {
-                "meter_id": meter["meter_id"],
-                "category": meter["category"],
-                "is_active": meter["is_active"],
-                "power_kw": round(random.uniform(0, 5), 2),
-                "consumption_kwh": round(random.uniform(0, 2), 2),
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
+    def generate(self, cycles=1, interval=0):
+        for cycle in range(cycles):
+            for meter in self.meters:
+                reading = {
+                    "meter_id": meter["meter_id"],
+                    "category": meter["category"],
+                    "is_active": meter["is_active"],
+                    "power_kw": round(random.uniform(0, 5), 2),
+                    "consumption_kwh": round(random.uniform(0, 2), 2),
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
 
-            yield reading
-            
+                yield reading
+
+            if cycle < cycles - 1:
+                time.sleep(interval)
+
+
 
 if __name__ == "__main__":
     meters = [
@@ -46,9 +45,10 @@ if __name__ == "__main__":
 
     generator = TelemetryGenerator(meters)
 
-    readings = list(generator.generate())
+    readings = generator.generate(cycles=2, interval=1)
 
     stream = MeterReadingStream(readings)
 
     for reading in stream:
         print(reading)
+
