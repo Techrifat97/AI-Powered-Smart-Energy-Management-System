@@ -1,7 +1,6 @@
 
 from .energy_reading import EnergyReading
 
-
 class Meter:
     def __init__(self, meter_id, category, unit, is_active=True):
         self.id = meter_id
