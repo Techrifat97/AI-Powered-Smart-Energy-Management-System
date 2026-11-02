@@ -40,15 +40,22 @@ if __name__ == "__main__":
     meters = [
         {"meter_id": 1, "category": "HVAC", "is_active": True},
         {"meter_id": 2, "category": "SOLAR", "is_active": True},
-        {"meter_id": 3, "category": "BATTERY", "is_active": False}
+        {"meter_id": 3, "category": "BATTERY", "is_active": False},
+        {"meter_id": 4, "category": "HVAC", "is_active": True},
+        {"meter_id": 5, "category": "SOLAR", "is_active": True},
+        {"meter_id": 6, "category": "BATTERY", "is_active": True},
+        {"meter_id": 7, "category": "HVAC", "is_active": False},
+        {"meter_id": 8, "category": "SOLAR", "is_active": True},
+        {"meter_id": 9, "category": "BATTERY", "is_active": True},
+        {"meter_id": 10, "category": "HVAC", "is_active": True}
     ]
 
     generator = TelemetryGenerator(meters)
-
-    readings = generator.generate(cycles=2, interval=1)
+    readings = generator.generate(cycles=5, interval=1)
 
     stream = MeterReadingStream(readings)
 
     for reading in stream:
         print(reading)
+
 
