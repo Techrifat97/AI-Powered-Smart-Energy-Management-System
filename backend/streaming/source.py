@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
+from math import isfinite
 import random
 import time
+
 
 class MeterReadingStream:
     def __init__(self, events):
@@ -15,9 +17,40 @@ class MeterReadingStream:
 
 class TelemetryGenerator:
     def __init__(self, meters):
-        self.meters = meters
+        # Keep the meters so an iterator can be reused in every cycle.
+        self.meters = list(meters)
+
+        for meter in self.meters:
+            if not isinstance(meter, dict):
+                raise TypeError("Each meter must be a dictionary")
+            for field in ["meter_id", "category", "is_active"]:
+                if field not in meter:
+                    raise ValueError("Missing meter field: " + field)
+
+            if isinstance(meter["meter_id"], bool) or not isinstance(meter["meter_id"], int):
+                raise TypeError("Meter ID must be an integer")
+            if meter["meter_id"] <= 0:
+                raise ValueError("Meter ID must be positive")
+            if not isinstance(meter["category"], str):
+                raise TypeError("Meter category must be a string")
+            if not meter["category"].strip():
+                raise ValueError("Meter category cannot be empty")
+            if not isinstance(meter["is_active"], bool):
+                raise TypeError("Meter activity must be True or False")
 
     def generate(self, cycles=1, interval=0):
+        if isinstance(cycles, bool) or not isinstance(cycles, int):
+            raise TypeError("Cycles must be an integer")
+        if cycles < 0:
+            raise ValueError("Cycles cannot be negative")
+        if isinstance(interval, bool) or not isinstance(interval, (int, float)):
+            raise TypeError("Interval must be a number")
+        if not isfinite(interval) or interval < 0:
+            raise ValueError("Interval must be finite and nonnegative")
+
+        if not self.meters:
+            return
+
         for cycle in range(cycles):
             for meter in self.meters:
                 reading = {
@@ -31,9 +64,8 @@ class TelemetryGenerator:
 
                 yield reading
 
-            if cycle < cycles - 1:
+            if cycle < cycles - 1 and interval > 0:
                 time.sleep(interval)
-
 
 
 if __name__ == "__main__":
@@ -57,5 +89,3 @@ if __name__ == "__main__":
 
     for reading in stream:
         print(reading)
-
-
