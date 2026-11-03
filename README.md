@@ -92,9 +92,9 @@ python3 -m unittest discover -s backend/accounts/tests -v
 
 ## Video Presentation
 
-We will add our group presentation video here before the final submission.
+Our Hometask 1 team presentation is available here:
 
-**Video link:** To be added.
+**Video link:** [Watch the Hometask 1 presentation](https://drive.google.com/file/d/1CrDGMJruxwF7Y-yy8LFkol5h9B4SZE-J/view?usp=sharing)
 
 ## Next Steps
 
