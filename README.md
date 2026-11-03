@@ -11,7 +11,7 @@ For Hometask 2, we are building one shared streaming framework in Python. It wil
 | Member | Classes | Responsibility | Progress |
 |---|---|---|---|
 | Shaon | `MeterReadingStream`, `TelemetryGenerator` | Generate meter readings and consume them using iterators and generators | Implemented |
-| Yassoub | `StreamProcessor`, `MeterFilter` | Define an abstract processing interface and filter inactive or low-power readings | In progress |
+| Yassoub | `StreamProcessor`, `MeterFilter` | Define an abstract processing interface and filter inactive or low-power readings | Implemented |
 | Marwan | `EnergyTransformer`, `PeakTariffProcessor`, `StreamPipeline` | Transform readings and connect the processing stages into one pipeline | In progress |
 
 The classes will work together as a single pipeline, rather than as three separate applications.
@@ -81,6 +81,18 @@ This class uses `yield` to generate simulated readings. We can set the number of
 
 Our current demo uses **10 meters and 5 cycles**, so it generates **50 events**. The simulation waits one second between cycles. It does not connect to physical IoT devices yet.
 
+### StreamProcessor & CompositeProcessor
+
+`StreamProcessor` is the abstract base class (`ABC`) defining the standard `process(event: dict) -> dict | None` contract for all stages. It overloads the `|` (`__or__`) operator to allow declarative pipeline composition: `stage1 | stage2`. Chained processors form a `CompositeProcessor` that short-circuits to `None` if an event is filtered by any intermediate stage.
+
+### MeterFilter
+
+`MeterFilter` inherits from `StreamProcessor` and provides configurable filtering:
+- Drops inactive meters (`is_active == False` returns `None`)
+- Drops readings below a minimum power threshold (`power_kw < min_power_kw` returns `None`)
+- Supports optional category whitelisting (e.g. only HVAC and SOLAR)
+- Returns a clean event dictionary for downstream processing when criteria are met
+
 ## Project Structure
 
 The Hometask 2 source files currently available are:
@@ -90,8 +102,12 @@ backend/
     streaming/
         __init__.py
         source.py
+        processor.py
+        filter.py
         tests/
             test_source.py
+            test_processor.py
+            test_filter.py
 ```
 
 The repository also contains the domain classes from Hometask 1. Additional streaming processor files will be added as the team completes them.
