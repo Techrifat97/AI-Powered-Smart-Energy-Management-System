@@ -1,5 +1,7 @@
 # AI-Powered Smart Energy Management System
 
+**Group 25**
+
 **Hometask 2 — Real-Time Data Processing**
 
 This is our Capstone project for the Compact Programming course at FH Dortmund. Our goal is to monitor energy use in buildings and process smart-meter data for analysis and sustainability recommendations.
@@ -8,11 +10,11 @@ For Hometask 2, we are building one shared streaming framework in Python. It wil
 
 ## Team Members and Responsibilities
 
-| Member | Classes | Responsibility | Progress |
-|---|---|---|---|
-| Shaon | `MeterReadingStream`, `TelemetryGenerator` | Generate meter readings and consume them using iterators and generators | Implemented |
-| Yassoub | `StreamProcessor`, `MeterFilter` | Define an abstract processing interface and filter inactive or low-power readings | In progress |
-| Marwan | `EnergyTransformer`, `PeakTariffProcessor`, `StreamPipeline` | Transform readings and connect the processing stages into one pipeline | In progress |
+| Member | Student ID | Program | Classes | Responsibility | Progress |
+|---|---|---|---|---|---|
+| Rifat Ali Shaon | 7225871 | MDT | `MeterReadingStream`, `TelemetryGenerator` | Generate meter readings and consume them using iterators and generators | Implemented |
+| Syed Yasoob Raza | 7226703 | ESE | `StreamProcessor`, `MeterFilter` | Define an abstract processing interface and filter inactive or low-power readings | In progress |
+| Marwan Ahmed | 7226233 | MDT | `EnergyTransformer`, `PeakTariffProcessor`, `StreamPipeline` | Transform readings and connect the processing stages into one pipeline | In progress |
 
 The classes will work together as a single pipeline, rather than as three separate applications.
 
