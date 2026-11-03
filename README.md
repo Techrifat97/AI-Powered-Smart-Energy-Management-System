@@ -95,7 +95,3 @@ python3 -m unittest discover -s backend/accounts/tests -v
 Our Hometask 1 team presentation is available here:
 
 **Video link:** [Watch the Hometask 1 presentation](https://drive.google.com/file/d/1CrDGMJruxwF7Y-yy8LFkol5h9B4SZE-J/view?usp=sharing)
-
-## Next Steps
-
-Home Assignment 1 covers the basic OOP implementation. We will continue developing the project by adding data streaming, database integration, APIs, AI recommendations, and a React dashboard in the next stages.
