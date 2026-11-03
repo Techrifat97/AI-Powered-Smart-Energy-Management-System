@@ -6,22 +6,22 @@ AI-driven energy monitoring, analysis and sustainability coaching for buildings.
 
 | Member | Subsystem | Django app | Implemented classes |
 |---|---|---|---|
-| Shaon | S1 Energy Monitoring & Analysis | `backend/monitoring` | Building, Meter, EnergyReading |
-| Yassoub | S2 Sustainability & AI Coach | `backend/coach` | TODO |
-| Marwan | S3 Web Dashboard & Alerts | `backend/accounts` | User, UserPreferences, Notification |
+| Rifat Ali Shaon | S1 Monitoring & Analytics | `backend/monitoring` | Building, Meter, EnergyReading |
+| Syed Yasoob Raza | S2 Forecasting & AI Coach | `backend/coach` | TODO |
+| Marwan Ahmed | S3 Cost, Scenarios & Alerts | `backend/decisions` | TariffPlan, EnergyBudget, Notification, ScenarioResult, CostCalculator, ScenarioSimulator, BaselineAnomalyDetector, AlertService |
 
 ## System Design
 
 UML class diagrams per subsystem (images in `docs/uml/`).
 
-### S1 Energy Monitoring
+### S1 Monitoring & Analytics
 ![S1 class diagram](docs/uml/s1-monitoring.png)
 
-### S2 Sustainability & AI Coach
+### S2 Forecasting & AI Coach
 ![S2 class diagram](docs/uml/s2-coach.png)
 
-### S3 Web Dashboard & Alerts
-![S3 class diagram](docs/uml/s3-accounts.png)
+### S3 Cost, Scenarios & Alerts
+![S3 class diagram](docs/uml/s3-decisions.png)
 
 ## Presentation Link
 
@@ -40,5 +40,5 @@ frontend/                React app
 ## Running the tests
 
 ```
-python -m unittest discover -s backend/accounts/tests -t .
+python -m unittest discover -s backend/decisions/tests -t .
 ```
