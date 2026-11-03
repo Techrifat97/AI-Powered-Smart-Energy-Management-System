@@ -1,16 +1,18 @@
 # AI-Powered Smart Energy Management System
 
+**Group 25**
+
 This is our Capstone project for the Compact Programming course at FH Dortmund. We are developing a system that monitors energy consumption in buildings, analyzes energy usage, and provides recommendations to help reduce energy waste.
 
 For Home Assignment 1, we focused on the object-oriented programming part of the project. Each team member implemented three Python classes from their subsystem using constructors, attributes, getters, setters, and basic methods.
 
 ## Team Members
 
-| Member | Subsystem | Python Classes |
-| ------- | --------------------------------- | ------------------------------------------------------- |
-| Shaon | S1 — Energy Monitoring & Analysis | Building, Meter, EnergyReading |
-| Yassoub | S2 — Sustainability & AI Coach | AIRecommendation, RecommendationFeedback, LLMRequestLog |
-| Marwan | S3 — Web Dashboard & Alerts | User, UserPreferences, Notification |
+| Member | Student ID | Program | Subsystem | Python Classes |
+|---|---|---|---|---|
+| Rifat Ali Shaon | 7225871 | MDT | S1 — Energy Monitoring & Analysis | Building, Meter, EnergyReading |
+| Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability & AI Coach | AIRecommendation, RecommendationFeedback, LLMRequestLog |
+| Marwan Ahmed | 7226233 | MDT | S3 — Web Dashboard & Alerts | User, UserPreferences, Notification |
 
 ## Our Implementation
 
