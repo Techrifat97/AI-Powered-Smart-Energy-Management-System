@@ -225,7 +225,7 @@ python3 -m unittest discover -s backend/streaming/tests -v
 
 | Result | Count |
 |---|---|
-| Tests passed | 43 |
+| Tests passed | 15 |
 | Tests failed | 0 |
 
 The tests cover the generator and iterator, abstract classes, inheritance, operator overloading, filtering, energy calculations, battery charging and discharging, peak detection, and complete pipeline processing.
