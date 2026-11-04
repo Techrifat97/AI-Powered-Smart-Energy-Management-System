@@ -1,0 +1,94 @@
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eff6ff", "primaryTextColor": "#0f172a", "primaryBorderColor": "#2563eb", "lineColor": "#475569", "fontFamily": "Arial", "fontSize": "18px"}, "themeCSS": ".edgeTerminals text { transform: translate(-14px, -12px); font-size: 14px; } .edgeTerminals .inner text { transform: translate(2px, -12px); }", "flowchart": {"htmlLabels": false}, "class": {"hideEmptyMembersBox": true}}}%%
+classDiagram
+    direction LR
+
+    class Building {
+        <<entity>>
+        +int id
+        +str name
+        +str address
+        +float floor_area_m2
+        +str type
+        +datetime created_at
+        +list~Meter~ meters
+        +add_meter(meter)
+        +active_meters() list~Meter~
+    }
+
+    class Meter {
+        <<entity>>
+        +int id
+        +str category
+        +str unit
+        +bool is_active
+        +list~EnergyReading~ readings
+        +get_status() bool
+        +set_status(status)
+        +add_reading(reading)
+        +latest_reading()
+    }
+
+    class EnergyReading {
+        <<entity>>
+        +int id
+        +datetime timestamp
+        +Decimal consumption_kwh
+        +float power_kw
+        +str source
+        +bool is_valid
+        +get_consumption() Decimal
+        +get_power() float
+        +to_dict() dict
+    }
+
+    class ReadingValidator {
+        <<service>>
+        +validate(meter, reading) None
+    }
+
+    class ReadingIngestionService {
+        <<service>>
+        +ReadingValidator validator
+        +ingest(meter, reading) EnergyReading
+        +ingest_batch(meter, readings) list~EnergyReading~
+        +ingest_event(meter, event_dict, reading_id) EnergyReading
+    }
+
+    class ConsumptionSummary {
+        <<value_object>>
+        +int building_id
+        +datetime start
+        +datetime end
+        +Decimal gross_load_kwh
+        +Decimal solar_generation_kwh
+        +Decimal net_grid_kwh
+        +dict category_totals_kwh
+        +float peak_kw
+        +int reading_count
+        +get_net_grid() Decimal
+        +get_category_totals() dict
+        +to_dict() dict
+    }
+
+    class EnergyAnalyticsService {
+        <<service>>
+        +summarize(building, start, end) ConsumptionSummary
+    }
+
+    class TelemetryGenerator {
+        <<external_Hometask_2>>
+        +list~dict~ meters
+        +generate(cycles=1, interval=0) Iterator
+    }
+
+    Building "1" *-- "0..*" Meter : contains
+    Meter "1" *-- "0..*" EnergyReading : stores
+    ReadingIngestionService --> ReadingValidator : uses injected validator
+    ReadingIngestionService ..> Meter : calls add_reading
+    ReadingIngestionService ..> EnergyReading : creates from event
+    EnergyAnalyticsService ..> Building : reads
+    EnergyAnalyticsService ..> Meter : reads active meters
+    EnergyAnalyticsService ..> ReadingValidator : rechecks readings
+    EnergyAnalyticsService ..> ConsumptionSummary : creates
+    TelemetryGenerator ..> ReadingIngestionService : planned event dictionaries
+
