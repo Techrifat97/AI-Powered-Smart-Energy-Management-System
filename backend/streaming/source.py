@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from math import isfinite
 import random
 import time
@@ -16,7 +17,14 @@ class MeterReadingStream:
 
 
 class TelemetryGenerator:
-    def __init__(self, meters):
+    """Generate measurements lazily; the waiting interval does not set their duration."""
+
+    def __init__(self, meters, measurement_seconds=60):
+        if isinstance(measurement_seconds, bool) or not isinstance(measurement_seconds, (int, float)):
+            raise TypeError("Measurement duration must be a number")
+        if not isfinite(measurement_seconds) or measurement_seconds <= 0:
+            raise ValueError("Measurement duration must be finite and positive")
+        self.measurement_seconds = float(measurement_seconds)
         # Keep the meters so an iterator can be reused in every cycle.
         self.meters = list(meters)
 
@@ -37,6 +45,9 @@ class TelemetryGenerator:
                 raise ValueError("Meter category cannot be empty")
             if not isinstance(meter["is_active"], bool):
                 raise TypeError("Meter activity must be True or False")
+            if meter["category"] == "BATTERY" and "battery_mode" in meter:
+                if meter["battery_mode"] not in ["CHARGING", "DISCHARGING"]:
+                    raise ValueError("Battery mode must be CHARGING or DISCHARGING")
 
     def generate(self, cycles=1, interval=0):
         if isinstance(cycles, bool) or not isinstance(cycles, int):
@@ -53,14 +64,26 @@ class TelemetryGenerator:
 
         for cycle in range(cycles):
             for meter in self.meters:
+                power_kw = round(random.uniform(0, 5), 2)
+                # Calculate energy from the same power measurement, not another random value.
+                energy_kwh = (
+                    Decimal(str(power_kw)) * Decimal(str(self.measurement_seconds))
+                    / Decimal("3600")
+                )
                 reading = {
                     "meter_id": meter["meter_id"],
                     "category": meter["category"],
                     "is_active": meter["is_active"],
-                    "power_kw": round(random.uniform(0, 5), 2),
-                    "consumption_kwh": round(random.uniform(0, 2), 2),
+                    "power_kw": power_kw,
+                    "consumption_kwh": float(energy_kwh),
+                    "measurement_seconds": self.measurement_seconds,
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
+                if meter["category"] == "BATTERY":
+                    mode = meter.get("battery_mode")
+                    if mode is None:
+                        mode = random.choice(["CHARGING", "DISCHARGING"])
+                    reading["battery_mode"] = mode
 
                 yield reading
 

@@ -49,6 +49,12 @@ class TestTelemetryGenerator(unittest.TestCase):
 
     def setUp(self):
         self.meter = {"meter_id": 1, "category": "HVAC", "is_active": True}
+        power_patch = patch("backend.streaming.source.random.uniform", return_value=2.0)
+        mode_patch = patch("backend.streaming.source.random.choice", return_value="CHARGING")
+        power_patch.start()
+        mode_patch.start()
+        self.addCleanup(power_patch.stop)
+        self.addCleanup(mode_patch.stop)
 
     def test_generate_readings(self):
         meters = [
@@ -101,18 +107,19 @@ class TestTelemetryGenerator(unittest.TestCase):
     def test_generated_event_format_and_values(self):
         generator = TelemetryGenerator([self.meter])
         with patch("backend.streaming.source.random.uniform",
-                   side_effect=[1.234, 0.567]):
+                   return_value=1.234):
             reading = next(generator.generate())
 
         self.assertEqual(set(reading), {
             "meter_id", "category", "is_active", "power_kw",
-            "consumption_kwh", "timestamp"
+            "consumption_kwh", "measurement_seconds", "timestamp"
         })
         self.assertEqual(reading["meter_id"], 1)
         self.assertEqual(reading["category"], "HVAC")
         self.assertIs(reading["is_active"], True)
         self.assertEqual(reading["power_kw"], 1.23)
-        self.assertEqual(reading["consumption_kwh"], 0.57)
+        self.assertEqual(reading["consumption_kwh"], 0.0205)
+        self.assertEqual(reading["measurement_seconds"], 60)
         timestamp = datetime.fromisoformat(reading["timestamp"])
         self.assertEqual(timestamp.tzinfo, timezone.utc)
 
@@ -122,7 +129,7 @@ class TestTelemetryGenerator(unittest.TestCase):
             self.assertGreaterEqual(reading["power_kw"], 0)
             self.assertLessEqual(reading["power_kw"], 5)
             self.assertGreaterEqual(reading["consumption_kwh"], 0)
-            self.assertLessEqual(reading["consumption_kwh"], 2)
+            self.assertLessEqual(reading["consumption_kwh"], 5 / 60)
 
     def test_generated_events_pass_through_stream_lazily(self):
         generator = TelemetryGenerator([self.meter])
@@ -130,9 +137,9 @@ class TestTelemetryGenerator(unittest.TestCase):
             stream = MeterReadingStream(generator.generate(cycles=2))
             uniform.assert_not_called()
             self.assertEqual(next(stream)["meter_id"], 1)
-            self.assertEqual(uniform.call_count, 2)
+            self.assertEqual(uniform.call_count, 1)
             self.assertEqual(len(list(stream)), 1)
-            self.assertEqual(uniform.call_count, 4)
+            self.assertEqual(uniform.call_count, 2)
 
     def test_waits_only_between_cycles(self):
         generator = TelemetryGenerator([self.meter, self.meter.copy()])
@@ -197,6 +204,47 @@ class TestTelemetryGenerator(unittest.TestCase):
             with self.subTest(interval=interval):
                 with self.assertRaises(expected_error):
                     next(generator.generate(interval=interval))
+
+    def test_energy_matches_power_and_measurement_duration(self):
+        for seconds in [30, 60, 3600]:
+            with self.subTest(seconds=seconds):
+                generator = TelemetryGenerator([self.meter], measurement_seconds=seconds)
+                reading = next(generator.generate(interval=0))
+                self.assertAlmostEqual(
+                    reading["consumption_kwh"], reading["power_kw"] * seconds / 3600
+                )
+
+    def test_measurement_duration_does_not_depend_on_waiting_interval(self):
+        generator = TelemetryGenerator([self.meter], measurement_seconds=60)
+        with patch("backend.streaming.source.time.sleep") as sleep:
+            readings = list(generator.generate(cycles=2, interval=1))
+        self.assertEqual(readings[0]["consumption_kwh"], readings[1]["consumption_kwh"])
+        self.assertEqual(readings[0]["measurement_seconds"], 60)
+        sleep.assert_called_once_with(1)
+
+    def test_battery_modes_are_explicit_or_simulated(self):
+        for mode in ["CHARGING", "DISCHARGING", None]:
+            with self.subTest(mode=mode):
+                meter = {"meter_id": 2, "category": "BATTERY", "is_active": True}
+                if mode is not None:
+                    meter["battery_mode"] = mode
+                reading = next(TelemetryGenerator([meter]).generate())
+                expected_mode = mode if mode is not None else "CHARGING"
+                self.assertEqual(reading["battery_mode"], expected_mode)
+        meter["battery_mode"] = "UNKNOWN"
+        with self.assertRaises(ValueError):
+            TelemetryGenerator([meter])
+
+    def test_invalid_measurement_durations(self):
+        cases = [
+            ("60", TypeError), (True, TypeError), (None, TypeError),
+            (0, ValueError), (-1, ValueError),
+            (float("nan"), ValueError), (float("inf"), ValueError)
+        ]
+        for seconds, expected_error in cases:
+            with self.subTest(seconds=seconds):
+                with self.assertRaises(expected_error):
+                    TelemetryGenerator([self.meter], measurement_seconds=seconds)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,49 @@
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#eff6ff", "primaryTextColor": "#0f172a", "primaryBorderColor": "#2563eb", "lineColor": "#475569", "fontFamily": "Arial", "fontSize": "18px"}, "themeCSS": ".edgeTerminals text { transform: translate(-14px, -12px); font-size: 14px; } .edgeTerminals .inner text { transform: translate(2px, -12px); }", "flowchart": {"htmlLabels": false}, "class": {"hideEmptyMembersBox": true}}}%%
+classDiagram
+    direction LR
+
+    class TelemetryGenerator {
+        +list~dict~ meters
+        +float measurement_seconds
+        +generate(cycles=1, interval=0) Iterator
+    }
+
+    class MeterReadingStream {
+        +Iterator events
+        +__iter__() MeterReadingStream
+        +__next__()
+    }
+
+    class StreamProcessor {
+        <<abstract>>
+        +process(event)*
+        +__or__(other) StreamPipeline
+    }
+
+    class MeterFilter {
+        +Decimal min_power_kw
+        +process(event)
+    }
+
+    class EnergyTransformer {
+        +process(event)
+    }
+
+    class PeakTariffProcessor {
+        +Decimal threshold_kw
+        +process(event)
+    }
+
+    class StreamPipeline {
+        +list~StreamProcessor~ processors
+        +__or__(other) StreamPipeline
+        +run(events) Iterator
+    }
+
+    StreamProcessor <|-- MeterFilter
+    StreamProcessor <|-- EnergyTransformer
+    StreamProcessor <|-- PeakTariffProcessor
+    StreamPipeline "0..*" o-- "0..*" StreamProcessor : ordered shared stages
+    StreamProcessor ..> StreamPipeline : operator creates
+    MeterReadingStream ..> TelemetryGenerator : iterates generated events
+    StreamPipeline ..> MeterReadingStream : consumes event iterator
