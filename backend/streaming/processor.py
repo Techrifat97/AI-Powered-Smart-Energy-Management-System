@@ -83,3 +83,4 @@ class CompositeProcessor(StreamProcessor):
     def __repr__(self):
         stage_names = " | ".join(s.__class__.__name__ for s in self.stages)
         return f"CompositeProcessor({stage_names})"
+

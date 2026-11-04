@@ -78,3 +78,4 @@ class MeterFilter(StreamProcessor):
 
         # Return a copy to ensure immutability and prevent unexpected in-place mutations
         return dict(event)
+
