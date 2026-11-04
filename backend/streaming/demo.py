@@ -1,4 +1,4 @@
-"""Run a short terminal demonstration with configurable cycles and delays."""
+"""Run the streaming demo in the terminal."""
 
 import argparse
 import random
@@ -8,7 +8,7 @@ from .source import MeterReadingStream, TelemetryGenerator
 
 
 def count_events(events, counts):
-    """Count incoming events while leaving the stream lazy."""
+    """Count events without reading ahead."""
     for event in events:
         counts["generated"] += 1
         yield event

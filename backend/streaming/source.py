@@ -17,7 +17,7 @@ class MeterReadingStream:
 
 
 class TelemetryGenerator:
-    """Generate measurements lazily; the waiting interval does not set their duration."""
+    """Yield readings with measurement duration separate from the simulation delay."""
 
     def __init__(self, meters, measurement_seconds=60):
         if isinstance(measurement_seconds, bool) or not isinstance(measurement_seconds, (int, float)):
@@ -25,7 +25,7 @@ class TelemetryGenerator:
         if not isfinite(measurement_seconds) or measurement_seconds <= 0:
             raise ValueError("Measurement duration must be finite and positive")
         self.measurement_seconds = float(measurement_seconds)
-        # Keep the meters so an iterator can be reused in every cycle.
+        # Reuse the meters across cycles.
         self.meters = list(meters)
 
         for meter in self.meters:
@@ -65,7 +65,7 @@ class TelemetryGenerator:
         for cycle in range(cycles):
             for meter in self.meters:
                 power_kw = round(random.uniform(0, 5), 2)
-                # Calculate energy from the same power measurement, not another random value.
+                # Convert seconds to hours for the kWh calculation.
                 energy_kwh = (
                     Decimal(str(power_kw)) * Decimal(str(self.measurement_seconds))
                     / Decimal("3600")

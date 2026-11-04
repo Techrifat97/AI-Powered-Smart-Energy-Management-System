@@ -18,7 +18,7 @@ class ProcessorTests(unittest.TestCase):
             "timestamp": "2026-01-01T12:00:00+00:00"
         }
 
-    def test_abstract_class_cannot_be_instantiated(self):
+    def test_abstract_interface_and_polymorphism(self):
         with self.assertRaises(TypeError):
             StreamProcessor()
 
@@ -27,48 +27,34 @@ class ProcessorTests(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             IncompleteProcessor()
-
-    def test_inheritance_and_polymorphism(self):
-        processors = [MeterFilter(), EnergyTransformer(), PeakTariffProcessor()]
-        for processor in processors:
+        for processor in [MeterFilter(), EnergyTransformer(), PeakTariffProcessor()]:
             with self.subTest(processor=type(processor).__name__):
                 self.assertIsInstance(processor, StreamProcessor)
                 self.assertIsInstance(processor.process(self.event), dict)
 
-    def test_invalid_thresholds(self):
-        cases = [
-            (None, TypeError), (True, TypeError), ("0.5", TypeError),
-            (-1, ValueError), (float("nan"), ValueError), (float("inf"), ValueError)
+    def test_filter_activity_and_power(self):
+        categories = [
+            ("HVAC", None), ("SOLAR", None),
+            ("BATTERY", "CHARGING"), ("BATTERY", "DISCHARGING")
         ]
-        for processor_type in [MeterFilter, PeakTariffProcessor]:
-            for value, expected_error in cases:
-                with self.subTest(processor=processor_type.__name__, value=value):
-                    with self.assertRaises(expected_error):
-                        processor_type(value)
-
-    def test_filter_rejects_inactive_meters(self):
-        for category in ["HVAC", "SOLAR", "BATTERY"]:
-            with self.subTest(category=category):
-                event = self.event.copy()
-                event.update(category=category, is_active=False, battery_mode="CHARGING")
-                self.assertIsNone(MeterFilter(0).process(event))
-
-    def test_filter_uses_power_and_includes_the_threshold(self):
-        for category, mode in [("HVAC", None), ("SOLAR", None),
-                               ("BATTERY", "CHARGING"), ("BATTERY", "DISCHARGING")]:
-            for power in [0.49, 0.5, 1]:
-                with self.subTest(category=category, mode=mode, power=power):
+        for category, mode in categories:
+            for active, power in [(False, 5), (True, 0.49), (True, 0.5), (True, 1)]:
+                with self.subTest(category=category, mode=mode, active=active, power=power):
                     event = self.event.copy()
-                    event.update(category=category, power_kw=power, consumption_kwh=100)
+                    event.update(category=category, is_active=active,
+                                 power_kw=power, consumption_kwh=100)
                     if mode is not None:
                         event["battery_mode"] = mode
                     result = MeterFilter(0.5).process(event)
-                    if power < 0.5:
+                    if not active or power < 0.5:
                         self.assertIsNone(result)
                     else:
                         self.assertIs(result, event)
 
-    def test_energy_contribution_signs(self):
+        self.event["power_kw"] = Decimal("0.1")
+        self.assertIsNotNone(MeterFilter(0.1).process(self.event))
+
+    def test_energy_contributions_and_decimal_accuracy(self):
         cases = [
             ("HVAC", None, "2"), ("LIGHTING", None, "2"), ("PLUG", None, "2"),
             ("SOLAR", None, "-2"), ("BATTERY", "CHARGING", "2"),
@@ -80,31 +66,23 @@ class ProcessorTests(unittest.TestCase):
                 event.update(category=category, consumption_kwh=2)
                 if mode is not None:
                     event["battery_mode"] = mode
+                before = event.copy()
                 result = EnergyTransformer().process(event)
                 self.assertEqual(result["net_grid_contribution_kwh"], Decimal(expected))
                 self.assertNotIn("net_grid_kwh", result)
+                self.assertEqual(event, before)
 
-    def test_load_and_solar_balance_uses_decimal(self):
         load = self.event.copy()
         load["consumption_kwh"] = Decimal("0.2")
         solar = self.event.copy()
         solar.update(category="SOLAR", consumption_kwh=Decimal("0.1"))
         transformer = EnergyTransformer()
-        net_energy = (
-            transformer.process(load)["net_grid_contribution_kwh"]
-            + transformer.process(solar)["net_grid_contribution_kwh"]
-        )
-        self.assertEqual(net_energy, Decimal("0.1"))
+        load_result = transformer.process(load)
+        solar_result = transformer.process(solar)
+        total = load_result["net_grid_contribution_kwh"] + solar_result["net_grid_contribution_kwh"]
+        self.assertEqual(total, Decimal("0.1"))
 
-    def test_processors_do_not_change_the_original_event(self):
-        before = self.event.copy()
-        transformed = EnergyTransformer().process(self.event)
-        result = PeakTariffProcessor(1).process(transformed)
-        self.assertEqual(self.event, before)
-        self.assertNotIn("is_peak", transformed)
-        self.assertTrue(result["is_peak"])
-
-    def test_peak_is_strictly_above_the_threshold_for_consumption_only(self):
+    def test_peak_power_detection(self):
         categories = [
             ("HVAC", None, True), ("SOLAR", None, False),
             ("LIGHTING", None, True), ("PLUG", None, True),
@@ -117,27 +95,15 @@ class ProcessorTests(unittest.TestCase):
                     event.update(category=category, power_kw=power)
                     if mode is not None:
                         event["battery_mode"] = mode
+                    before = event.copy()
                     result = PeakTariffProcessor(4).process(event)
                     self.assertIs(result["is_peak"], consumption and power > 4)
+                    self.assertEqual(event, before)
 
-    def test_decimal_power_threshold_comparisons_are_exact(self):
         self.event["power_kw"] = Decimal("0.1")
-        self.assertIsNotNone(MeterFilter(0.1).process(self.event))
         self.assertFalse(PeakTariffProcessor(0.1).process(self.event)["is_peak"])
 
-    def test_invalid_event_types_and_missing_fields(self):
-        for processor in [MeterFilter(), EnergyTransformer(), PeakTariffProcessor()]:
-            with self.subTest(processor=type(processor).__name__):
-                for event in [None, [], 42]:
-                    with self.assertRaises(TypeError):
-                        processor.process(event)
-                for field in self.event:
-                    event = self.event.copy()
-                    del event[field]
-                    with self.assertRaises(ValueError):
-                        processor.process(event)
-
-    def test_invalid_event_values(self):
+    def test_invalid_event_data(self):
         cases = [
             ("meter_id", True, TypeError), ("meter_id", 0, ValueError),
             ("category", "UNKNOWN", ValueError), ("is_active", "False", TypeError),
@@ -150,6 +116,16 @@ class ProcessorTests(unittest.TestCase):
             ("timestamp", "2026-01-01T12:00:00+02:00", ValueError)
         ]
         for processor in [MeterFilter(), EnergyTransformer(), PeakTariffProcessor()]:
+            for event in [None, [], 42]:
+                with self.subTest(processor=type(processor).__name__, event=event):
+                    with self.assertRaises(TypeError):
+                        processor.process(event)
+            for field in self.event:
+                with self.subTest(processor=type(processor).__name__, missing=field):
+                    event = self.event.copy()
+                    del event[field]
+                    with self.assertRaises(ValueError):
+                        processor.process(event)
             for field, value, expected_error in cases:
                 with self.subTest(processor=type(processor).__name__, field=field, value=value):
                     event = self.event.copy()
@@ -157,26 +133,47 @@ class ProcessorTests(unittest.TestCase):
                     with self.assertRaises(expected_error):
                         processor.process(event)
 
-    def test_battery_direction_is_required(self):
-        self.event["category"] = "BATTERY"
         for mode in [None, "UNKNOWN"]:
             with self.subTest(mode=mode):
-                self.event["battery_mode"] = mode
+                event = self.event.copy()
+                event.update(category="BATTERY", battery_mode=mode)
                 with self.assertRaises(ValueError):
-                    EnergyTransformer().process(self.event)
+                    EnergyTransformer().process(event)
 
-    def test_measurement_metadata_must_match_energy(self):
-        self.event.update(power_kw=3, consumption_kwh=0.05, measurement_seconds=60)
-        self.assertIsNotNone(MeterFilter().process(self.event))
-        self.event["timestamp"] = "2026-01-01T12:00:00Z"
-        self.assertIsNotNone(MeterFilter().process(self.event))
+        event = self.event.copy()
+        event.update(power_kw=3, consumption_kwh=0.05, measurement_seconds=60,
+                     timestamp="2026-01-01T12:00:00Z")
+        self.assertIsNotNone(MeterFilter().process(event))
         for field, value in [("measurement_seconds", 0), ("measurement_seconds", -1),
                              ("consumption_kwh", 1)]:
             with self.subTest(field=field, value=value):
-                event = self.event.copy()
-                event[field] = value
+                invalid = event.copy()
+                invalid[field] = value
                 with self.assertRaises(ValueError):
-                    MeterFilter().process(event)
+                    MeterFilter().process(invalid)
+
+    def test_invalid_processor_settings(self):
+        for processor_type in [MeterFilter, PeakTariffProcessor]:
+            for value, expected_error in [
+                (None, TypeError), (True, TypeError), ("0.5", TypeError),
+                (-1, ValueError), (float("nan"), ValueError), (float("inf"), ValueError)
+            ]:
+                with self.subTest(processor=processor_type.__name__, value=value):
+                    with self.assertRaises(expected_error):
+                        processor_type(value)
+
+        for stages in [[object()], [None]]:
+            with self.subTest(stages=stages):
+                with self.assertRaises(TypeError):
+                    StreamPipeline(stages)
+        with self.assertRaises(TypeError):
+            MeterFilter() | 42
+        pipeline = MeterFilter() | EnergyTransformer()
+        with self.assertRaises(TypeError):
+            pipeline | None
+        with patch.object(pipeline.processors[0], "process", return_value=False):
+            with self.assertRaises(TypeError):
+                next(pipeline.run([self.event]))
 
 
 class PipelineTests(unittest.TestCase):
@@ -186,39 +183,19 @@ class PipelineTests(unittest.TestCase):
             "power_kw": 3, "consumption_kwh": 0.05,
             "timestamp": "2026-01-01T12:00:00+00:00"
         }
-        self.pipeline = MeterFilter() | EnergyTransformer() | PeakTariffProcessor(2)
 
-    def test_operator_composition_and_results(self):
-        self.assertIsInstance(self.pipeline, StreamPipeline)
-        self.assertEqual(len(self.pipeline.processors), 3)
-        result = next(self.pipeline.run([self.event]))
-        self.assertEqual(result["net_grid_contribution_kwh"], Decimal("0.05"))
-        self.assertTrue(result["is_peak"])
-
-    def test_pipeline_composition_does_not_change_existing_pipelines(self):
+    def test_operator_composition_and_order(self):
         first = MeterFilter() | EnergyTransformer()
-        second = StreamPipeline([PeakTariffProcessor()])
-        combined = first | second
+        second = StreamPipeline([PeakTariffProcessor(2)])
+        pipeline = first | second
         self.assertEqual(len(first.processors), 2)
         self.assertEqual(len(second.processors), 1)
-        self.assertEqual(len(combined.processors), 3)
-        prepended = MeterFilter() | second
-        self.assertEqual(len(prepended.processors), 2)
+        self.assertEqual(len(pipeline.processors), 3)
+        result = next(pipeline.run([self.event]))
+        self.assertEqual(result["net_grid_contribution_kwh"], Decimal("0.05"))
+        self.assertTrue(result["is_peak"])
+        self.assertEqual(len((MeterFilter() | second).processors), 2)
 
-    def test_invalid_stages_and_invalid_processor_result(self):
-        for processors in [[object()], [None]]:
-            with self.subTest(processors=processors):
-                with self.assertRaises(TypeError):
-                    StreamPipeline(processors)
-        with self.assertRaises(TypeError):
-            MeterFilter() | 42
-        with self.assertRaises(TypeError):
-            self.pipeline | None
-        with patch.object(self.pipeline.processors[0], "process", return_value=False):
-            with self.assertRaises(TypeError):
-                next(self.pipeline.run([self.event]))
-
-    def test_custom_processors_run_in_order(self):
         class OrderProcessor(StreamProcessor):
             def __init__(self, name):
                 self.name = name
@@ -228,17 +205,10 @@ class PipelineTests(unittest.TestCase):
                 result["order"] = event.get("order", "") + self.name
                 return result
 
-        pipeline = OrderProcessor("A") | OrderProcessor("B") | OrderProcessor("C")
-        self.assertEqual(next(pipeline.run([self.event]))["order"], "ABC")
+        ordered = OrderProcessor("A") | OrderProcessor("B") | OrderProcessor("C")
+        self.assertEqual(next(ordered.run([self.event]))["order"], "ABC")
 
-    def test_rejected_events_do_not_reach_later_processors(self):
-        self.event["is_active"] = False
-        transformer = self.pipeline.processors[1]
-        with patch.object(transformer, "process", wraps=transformer.process) as process:
-            self.assertEqual(list(self.pipeline.run([self.event])), [])
-            process.assert_not_called()
-
-    def test_pipeline_is_lazy_and_does_not_prefetch_events(self):
+    def test_rejected_events_and_lazy_pipeline(self):
         consumed = []
 
         def events():
@@ -246,22 +216,29 @@ class PipelineTests(unittest.TestCase):
                 consumed.append(meter_id)
                 event = self.event.copy()
                 event["meter_id"] = meter_id
+                event["is_active"] = meter_id != 1
                 yield event
 
-        results = self.pipeline.run(MeterReadingStream(events()))
-        self.assertEqual(consumed, [])
-        self.assertEqual(next(results)["meter_id"], 1)
-        self.assertEqual(consumed, [1])
-        self.assertEqual(next(results)["meter_id"], 2)
-        self.assertEqual(consumed, [1, 2])
-        results.close()
+        transformer = EnergyTransformer()
+        pipeline = MeterFilter() | transformer | PeakTariffProcessor()
+        with patch.object(transformer, "process", wraps=transformer.process) as process:
+            results = pipeline.run(MeterReadingStream(events()))
+            self.assertEqual(consumed, [])
+            process.assert_not_called()
+            self.assertEqual(next(results)["meter_id"], 2)
+            self.assertEqual(consumed, [1, 2])
+            process.assert_called_once()
+            results.close()
         self.assertEqual(consumed, [1, 2])
 
-    def test_empty_stream_and_empty_pipeline(self):
-        self.assertEqual(list(self.pipeline.run(iter([]))), [])
+    def test_empty_stream_and_pipeline(self):
+        pipeline = MeterFilter() | EnergyTransformer()
+        self.assertEqual(list(pipeline.run(iter([]))), [])
         self.assertEqual(list(StreamPipeline([]).run([self.event])), [self.event])
 
-    def test_complete_generated_stream(self):
+
+class DemoTests(unittest.TestCase):
+    def test_end_to_end_stream_and_demo(self):
         meters = [
             {"meter_id": 1, "category": "HVAC", "is_active": True},
             {"meter_id": 2, "category": "SOLAR", "is_active": True},
@@ -270,9 +247,10 @@ class PipelineTests(unittest.TestCase):
             {"meter_id": 5, "category": "HVAC", "is_active": True},
             {"meter_id": 6, "category": "HVAC", "is_active": False}
         ]
+        pipeline = MeterFilter() | EnergyTransformer() | PeakTariffProcessor(2)
         with patch("backend.streaming.source.random.uniform", side_effect=[3, 1.8, 0.6, 4.8, 0.2, 5]):
-            source = TelemetryGenerator(meters).generate()
-            results = list(self.pipeline.run(MeterReadingStream(source)))
+            stream = MeterReadingStream(TelemetryGenerator(meters).generate())
+            results = list(pipeline.run(stream))
         self.assertEqual(len(results), 4)
         expected = [Decimal("0.05"), Decimal("-0.03"), Decimal("0.01"), Decimal("-0.08")]
         total = Decimal("0")
@@ -283,27 +261,23 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(results[0]["is_peak"])
         self.assertFalse(results[3]["is_peak"])
 
-
-class DemoTests(unittest.TestCase):
-    def test_demo_finishes_and_reports_processed_events(self):
         result = subprocess.run(
             [sys.executable, "-m", "backend.streaming.demo", "--cycles", "2",
              "--interval", "0", "--seed", "25"],
             capture_output=True, text=True, timeout=10
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("net contribution=", result.stdout)
         self.assertIn("CHARGING", result.stdout)
         self.assertIn("DISCHARGING", result.stdout)
-        self.assertIn("Generated 10;", result.stdout)
+        self.assertIn("net contribution=", result.stdout)
+        self.assertIn("Generated 10; accepted 7; filtered 3.", result.stdout)
 
-    def test_demo_explains_invalid_settings(self):
-        result = subprocess.run(
+        invalid = subprocess.run(
             [sys.executable, "-m", "backend.streaming.demo", "--cycles", "-1", "--interval", "0"],
             capture_output=True, text=True, timeout=10
         )
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("Cycles cannot be negative", result.stderr)
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("Cycles cannot be negative", invalid.stderr)
 
 
 if __name__ == "__main__":

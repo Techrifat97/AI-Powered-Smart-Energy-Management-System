@@ -1,12 +1,10 @@
-"""Small, reusable processing stages for dictionary-based energy events."""
-
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 
 def _nonnegative_number(value, name):
-    """Use Decimal for comparisons and signed energy calculations."""
+    """Return a finite, nonnegative Decimal."""
     if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
         raise TypeError(name + " must be a number")
     number = Decimal(str(value))
@@ -16,7 +14,6 @@ def _nonnegative_number(value, name):
 
 
 def _validate_event(event):
-    """Check the shared event format before a processor uses it."""
     if not isinstance(event, dict):
         raise TypeError("Event must be a dictionary")
     for field in ["meter_id", "category", "is_active", "power_kw", "consumption_kwh", "timestamp"]:
@@ -48,34 +45,32 @@ def _validate_event(event):
         if event.get("battery_mode") not in ["CHARGING", "DISCHARGING"]:
             raise ValueError("Battery mode must be CHARGING or DISCHARGING")
 
-    # Older six-field events can still be processed without duration metadata.
+    # Older events may omit measurement duration.
     if "measurement_seconds" in event:
         seconds = _nonnegative_number(event["measurement_seconds"], "Measurement duration")
         if seconds == 0:
             raise ValueError("Measurement duration must be positive")
         expected_energy = power * seconds / Decimal("3600")
-        # Allow only tiny differences caused by converting energy to a float.
+        # Allow small float rounding differences.
         if abs(energy - expected_energy) > Decimal("0.000000001"):
             raise ValueError("Energy does not match power and measurement duration")
 
 
 class StreamProcessor(ABC):
-    """A processor returns an event dictionary, or None to reject it."""
+    """Return an event, or None to filter it out."""
 
     @abstractmethod
     def process(self, event):
-        """Process one event."""
         raise NotImplementedError
 
     def __or__(self, other):
-        """Connect this processor to another processor or pipeline."""
         if isinstance(other, StreamPipeline):
             return StreamPipeline([self] + other.processors)
         return StreamPipeline([self, other])
 
 
 class MeterFilter(StreamProcessor):
-    """Keep active readings at or above the minimum power, for every category."""
+    """Keep active readings at or above the minimum power."""
 
     def __init__(self, min_power_kw=0.5):
         self.min_power_kw = _nonnegative_number(min_power_kw, "Minimum power")
@@ -90,7 +85,7 @@ class MeterFilter(StreamProcessor):
 
 
 class EnergyTransformer(StreamProcessor):
-    """Add this event's signed energy contribution, not a whole-building total."""
+    """Add this event's signed contribution to grid energy."""
 
     def process(self, event):
         _validate_event(event)
@@ -105,7 +100,7 @@ class EnergyTransformer(StreamProcessor):
 
 
 class PeakTariffProcessor(StreamProcessor):
-    """Flag consumption strictly above a power threshold; no billing is performed."""
+    """Flag consumption strictly above the power threshold."""
 
     def __init__(self, threshold_kw=4.0):
         self.threshold_kw = _nonnegative_number(threshold_kw, "Peak threshold")
@@ -121,7 +116,7 @@ class PeakTariffProcessor(StreamProcessor):
 
 
 class StreamPipeline:
-    """Run the same processor interface in order, one event at a time."""
+    """Run stages in order, one event at a time."""
 
     def __init__(self, processors):
         self.processors = list(processors)
@@ -130,13 +125,13 @@ class StreamPipeline:
                 raise TypeError("Each stage must be a StreamProcessor")
 
     def __or__(self, other):
-        """Build a new pipeline without changing the original pipeline."""
+        """Return a new pipeline with the added stages."""
         if isinstance(other, StreamPipeline):
             return StreamPipeline(self.processors + other.processors)
         return StreamPipeline(self.processors + [other])
 
     def run(self, events):
-        """Yield accepted results without collecting the input stream."""
+        """Yield accepted events without collecting the stream."""
         for event in events:
             result = event
             for processor in self.processors:
