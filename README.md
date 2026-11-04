@@ -234,7 +234,7 @@ The tests cover the generator and iterator, abstract classes, inheritance, opera
 
 A five-minute solo presentation demonstrates the streaming framework, explains the main Python concepts, and shows the program running in the terminal.
 
-**Video link:** To be added before submission.
+**Video presentation:** [Watch the Hometask 2 video on Google Drive](https://drive.google.com/file/d/1vi26k_h6fzYroSXv_U9ALHZEoCaxP1hZ/view?usp=sharing)
 
 ## 12. Conclusion
 
