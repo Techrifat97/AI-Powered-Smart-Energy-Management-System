@@ -130,7 +130,7 @@ Our S1 tests use `subTest()` to check related valid inputs, invalid inputs and e
 
 ## Video Presentation
 
-**Video presentation:** To be added after recording the updated presentation.
+**Video presentation:** [Watch our Hometask 1 presentation](https://drive.google.com/file/d/1xD4IJar7nnw1XJt82p9oObqoUe9krnT_/view?usp=sharing)
 
 ## Conclusion
 

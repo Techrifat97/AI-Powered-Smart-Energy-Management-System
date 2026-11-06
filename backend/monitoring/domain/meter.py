@@ -1,4 +1,3 @@
-
 from .energy_reading import EnergyReading
 
 class Meter:
