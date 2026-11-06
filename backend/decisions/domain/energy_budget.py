@@ -1,4 +1,5 @@
 from decimal import Decimal
+from ..errors import InvalidBudgetError
 
 
 class EnergyBudget:
@@ -17,13 +18,13 @@ class EnergyBudget:
     def set_monthly_limit_eur(self, limit):
         limit = Decimal(str(limit))
         if limit <= 0:
-            raise ValueError("Monthly limit must be positive")
+            raise InvalidBudgetError("Monthly limit must be positive")
         self.monthly_limit_eur = limit
 
     def add_cost(self, eur):
         eur = Decimal(str(eur))
         if eur < 0:
-            raise ValueError("Cost cannot be negative")
+            raise InvalidBudgetError("Cost cannot be negative")
         self._spent_eur += eur
 
     def reset_spending(self):

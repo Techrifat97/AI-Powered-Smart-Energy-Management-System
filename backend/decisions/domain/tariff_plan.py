@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from ..errors import InvalidTariffError
 
 
 class TariffPlan:
@@ -24,12 +25,12 @@ class TariffPlan:
     def set_eur_per_kwh(self, price):
         price = Decimal(str(price))
         if price <= 0:
-            raise ValueError("Price per kWh must be positive")
+            raise InvalidTariffError("Price per kWh must be positive")
         self.eur_per_kwh = price
 
     def set_valid_from(self, valid_from):
         if not isinstance(valid_from, date):
-            raise ValueError("valid_from must be a date")
+            raise InvalidTariffError("valid_from must be a date")
         self.valid_from = valid_from
 
     def reset(self):

@@ -1,4 +1,5 @@
 from datetime import datetime
+from ..errors import InvalidNotificationError
 
 
 class Notification:
@@ -27,12 +28,12 @@ class Notification:
 
     def set_message(self, new_message):
         if not new_message:
-            raise ValueError("Message cannot be empty")
+            raise InvalidNotificationError("Message cannot be empty")
         self.message = new_message
 
     def set_severity(self, new_severity):
         if new_severity not in Notification.SEVERITIES:
-            raise ValueError("Severity must be one of " + ", ".join(Notification.SEVERITIES))
+            raise InvalidNotificationError("Severity must be one of " + ", ".join(Notification.SEVERITIES))
         self.severity = new_severity
 
     def acknowledge(self):
