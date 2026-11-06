@@ -4,6 +4,7 @@ from decimal import Decimal
 from math import isfinite
 
 from .validation import to_decimal, validate_utc_timestamp
+from ..errors import InvalidSummaryError, MonitoringTypeError
 
 
 class ConsumptionSummary:
@@ -13,21 +14,21 @@ class ConsumptionSummary:
                  solar_generation_kwh, net_grid_kwh, category_totals_kwh,
                  peak_kw, reading_count):
         if isinstance(building_id, bool) or not isinstance(building_id, int):
-            raise TypeError("Building ID must be an integer")
+            raise MonitoringTypeError("Building ID must be an integer")
         validate_utc_timestamp(start, "Start")
         validate_utc_timestamp(end, "End")
         if start >= end:
-            raise ValueError("Start must be before end")
+            raise InvalidSummaryError("Start must be before end")
         if not isinstance(category_totals_kwh, dict):
-            raise TypeError("Category totals must be a dictionary")
+            raise MonitoringTypeError("Category totals must be a dictionary")
         if isinstance(reading_count, bool) or not isinstance(reading_count, int):
-            raise TypeError("Reading count must be an integer")
+            raise MonitoringTypeError("Reading count must be an integer")
         if reading_count < 0:
-            raise ValueError("Reading count cannot be negative")
+            raise InvalidSummaryError("Reading count cannot be negative")
         if isinstance(peak_kw, bool) or not isinstance(peak_kw, (int, float)):
-            raise TypeError("Peak power must be a number")
+            raise MonitoringTypeError("Peak power must be a number")
         if not isfinite(peak_kw):
-            raise ValueError("Peak power must be finite")
+            raise InvalidSummaryError("Peak power must be finite")
 
         self.building_id = building_id
         self.start = start
@@ -40,16 +41,16 @@ class ConsumptionSummary:
         }
         for category, total in category_totals_kwh.items():
             if category not in self.category_totals_kwh:
-                raise ValueError("Category totals may contain only HVAC, LIGHTING and PLUG")
+                raise InvalidSummaryError("Category totals may contain only HVAC, LIGHTING and PLUG")
             self.category_totals_kwh[category] = to_decimal(total, "Category total")
 
         total_load = Decimal("0")
         for total in self.category_totals_kwh.values():
             total_load += total
         if total_load != self.gross_load_kwh:
-            raise ValueError("Category totals must equal gross load")
+            raise InvalidSummaryError("Category totals must equal gross load")
         if self.net_grid_kwh != self.gross_load_kwh - self.solar_generation_kwh:
-            raise ValueError("Net grid energy must equal gross load minus solar generation")
+            raise InvalidSummaryError("Net grid energy must equal gross load minus solar generation")
         self.peak_kw = float(peak_kw)
         self.reading_count = reading_count
 

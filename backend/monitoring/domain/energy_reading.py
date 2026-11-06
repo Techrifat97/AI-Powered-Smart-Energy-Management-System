@@ -1,15 +1,16 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from math import isfinite
+from ..errors import InvalidReadingError, MonitoringTypeError
 
 
 class EnergyReading:
     def __init__(self, reading_id, timestamp, consumption_kwh,
                  power_kw, source, is_valid=True):
         if not isinstance(timestamp, datetime):
-            raise TypeError("Timestamp must be a datetime object")
+            raise MonitoringTypeError("Timestamp must be a datetime object")
         if not isinstance(is_valid, bool):
-            raise ValueError("Reading validity must be True or False")
+            raise InvalidReadingError("Reading validity must be True or False")
 
         self.id = reading_id
         self.timestamp = timestamp
@@ -34,20 +35,20 @@ class EnergyReading:
         try:
             consumption = Decimal(str(new_consumption))
         except InvalidOperation:
-            raise ValueError("Consumption must be a number")
+            raise InvalidReadingError("Consumption must be a number")
         if not consumption.is_finite() or consumption < 0:
-            raise ValueError("Consumption must be finite and nonnegative")
+            raise InvalidReadingError("Consumption must be finite and nonnegative")
         self.consumption_kwh = consumption
 
     def set_power(self, new_power):
         power = float(new_power)
         if not isfinite(power):
-            raise ValueError("Power must be finite")
+            raise InvalidReadingError("Power must be finite")
         self.power_kw = power
 
     def set_source(self, new_source):
         if new_source not in ("SIMULATED", "MANUAL"):
-            raise ValueError("Invalid reading source")
+            raise InvalidReadingError("Invalid reading source")
         self.source = new_source
 
     def to_dict(self):

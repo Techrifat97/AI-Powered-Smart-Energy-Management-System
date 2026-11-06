@@ -1,15 +1,16 @@
 from datetime import datetime
 from math import isfinite
 from .meter import Meter
+from ..errors import InvalidBuildingError, MonitoringTypeError
 
 
 class Building:
     def __init__(self, building_ID, name, address, floor_area_m2, building_type):
         if not isinstance(building_type, str) or not building_type.strip():
-            raise ValueError("Building type cannot be empty")
+            raise InvalidBuildingError("Building type cannot be empty")
         floor_area = float(floor_area_m2)
         if not isfinite(floor_area) or floor_area <= 0:
-            raise ValueError("Floor area must be positive")
+            raise InvalidBuildingError("Floor area must be positive")
 
         self.id = building_ID
         self.name = name
@@ -33,7 +34,7 @@ class Building:
 
     def add_meter(self, meter):
         if not isinstance(meter, Meter):
-            raise TypeError("Expected a Meter object")
+            raise MonitoringTypeError("Expected a Meter object")
         self.meters.append(meter)
 
     def active_meters(self):
