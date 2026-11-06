@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from ..domain.scenario_result import ScenarioResult
+from ..errors import InvalidScenarioError
 
 
 class ScenarioSimulator:
@@ -13,7 +14,7 @@ class ScenarioSimulator:
         for category, percent in changes.items():
             percent = Decimal(str(percent))
             if not Decimal("0") <= percent <= Decimal("100"):
-                raise ValueError("Reduction must be between 0 and 100 percent")
+                raise InvalidScenarioError("Reduction must be between 0 and 100 percent")
             saved_kwh += Decimal(str(summary["categories"].get(category, 0))) * percent / 100
         new_grid_kwh = grid_kwh - saved_kwh
         old_cost = self.calculator.project_month(grid_kwh)

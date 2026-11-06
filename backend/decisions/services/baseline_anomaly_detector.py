@@ -1,3 +1,6 @@
+from ..errors import InvalidThresholdError
+
+
 class BaselineAnomalyDetector:
     def __init__(self, threshold_pct=30):
         self.threshold_pct = None
@@ -8,7 +11,7 @@ class BaselineAnomalyDetector:
 
     def set_threshold_pct(self, threshold_pct):
         if threshold_pct <= 0:
-            raise ValueError("Threshold must be positive")
+            raise InvalidThresholdError("Threshold must be positive")
         self.threshold_pct = float(threshold_pct)
 
     def detect(self, readings, baseline):

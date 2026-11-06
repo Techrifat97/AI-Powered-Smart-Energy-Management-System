@@ -1,4 +1,5 @@
 from decimal import Decimal
+from ..errors import InvalidEnergyValueError
 
 CENT = Decimal("0.01")
 
@@ -12,7 +13,7 @@ class CostCalculator:
     def estimate(self, net_kwh):
         net_kwh = Decimal(str(net_kwh))
         if net_kwh < 0:
-            raise ValueError("Energy cannot be negative")
+            raise InvalidEnergyValueError("Energy cannot be negative")
         return (net_kwh * self.tariff.get_eur_per_kwh()).quantize(CENT)
 
     def project_month(self, daily_net_kwh):
