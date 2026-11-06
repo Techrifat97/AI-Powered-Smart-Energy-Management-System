@@ -1,3 +1,6 @@
+from ..errors import CoachTypeError, InvalidFeedbackError
+
+
 class RecommendationFeedback:
     """
     Represents user feedback on an AI energy recommendation.
@@ -31,9 +34,9 @@ class RecommendationFeedback:
     # --- Setters / Encapsulation ---
     def set_rating(self, new_rating: int) -> None:
         if not isinstance(new_rating, int):
-            raise TypeError("Rating must be an integer")
+            raise CoachTypeError("Rating must be an integer")
         if new_rating < RecommendationFeedback.MIN_RATING or new_rating > RecommendationFeedback.MAX_RATING:
-            raise ValueError(
+            raise InvalidFeedbackError(
                 f"Rating must be between {RecommendationFeedback.MIN_RATING} and {RecommendationFeedback.MAX_RATING}"
             )
         self.rating = new_rating
@@ -42,7 +45,7 @@ class RecommendationFeedback:
         if new_comment is None:
             self.comment = ""
         elif not isinstance(new_comment, str):
-            raise TypeError("Comment must be a string")
+            raise CoachTypeError("Comment must be a string")
         else:
             self.comment = new_comment.strip()
 

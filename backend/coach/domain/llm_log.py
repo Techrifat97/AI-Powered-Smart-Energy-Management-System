@@ -1,4 +1,5 @@
 from datetime import datetime
+from ..errors import CoachTypeError, InvalidLLMLogError
 
 
 class LLMRequestLog:
@@ -42,17 +43,17 @@ class LLMRequestLog:
     # --- Setters / Encapsulation ---
     def set_model(self, new_model: str) -> None:
         if not new_model or not isinstance(new_model, str):
-            raise ValueError("Model must be a non-empty string")
+            raise InvalidLLMLogError("Model must be a non-empty string")
         self.model = new_model.strip()
 
     def set_latency_ms(self, new_latency: int) -> None:
         if not isinstance(new_latency, (int, float)) or new_latency < 0:
-            raise ValueError("Latency must be a non-negative number")
+            raise InvalidLLMLogError("Latency must be a non-negative number")
         self.latency_ms = int(new_latency)
 
     def set_success(self, new_success: bool) -> None:
         if not isinstance(new_success, bool):
-            raise TypeError("Success must be a boolean")
+            raise CoachTypeError("Success must be a boolean")
         self.success = new_success
 
     # --- Domain Methods ---

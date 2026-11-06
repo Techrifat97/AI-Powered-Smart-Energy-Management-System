@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import List, Union
 
 from .feedback import RecommendationFeedback
+from ..errors import CoachTypeError, InvalidRecommendationError
 
 
 class AIRecommendation:
@@ -61,7 +62,7 @@ class AIRecommendation:
     # --- Setters / Encapsulation ---
     def set_title(self, new_title: str) -> None:
         if not new_title or not isinstance(new_title, str):
-            raise ValueError("Title must be a non-empty string")
+            raise InvalidRecommendationError("Title must be a non-empty string")
         self.title = new_title.strip()
 
     def set_saving_kwh(self, new_saving: Union[Decimal, int, float, str]) -> None:
@@ -69,19 +70,19 @@ class AIRecommendation:
             try:
                 dec = Decimal(str(new_saving))
             except Exception as e:
-                raise ValueError(f"Invalid decimal value: {new_saving}") from e
+                raise InvalidRecommendationError(f"Invalid decimal value: {new_saving}") from e
         elif isinstance(new_saving, Decimal):
             dec = new_saving
         else:
-            raise TypeError("saving_kwh must be a Decimal, float, int, or numeric string")
+            raise CoachTypeError("saving_kwh must be a Decimal, float, int, or numeric string")
 
         if dec < 0:
-            raise ValueError("saving_kwh must be non-negative")
+            raise InvalidRecommendationError("saving_kwh must be non-negative")
         self.saving_kwh = dec
 
     def set_source(self, new_source: str) -> None:
         if not isinstance(new_source, str):
-            raise TypeError("Source must be a string")
+            raise CoachTypeError("Source must be a string")
         clean = new_source.strip()
         matched = None
         for allowed in AIRecommendation.ALLOWED_SOURCES:
@@ -89,15 +90,15 @@ class AIRecommendation:
                 matched = allowed
                 break
         if matched is None:
-            raise ValueError(f"Source must be one of: {', '.join(AIRecommendation.ALLOWED_SOURCES)}")
+            raise InvalidRecommendationError(f"Source must be one of: {', '.join(AIRecommendation.ALLOWED_SOURCES)}")
         self.source = matched
 
     def set_status(self, new_status: str) -> None:
         if not isinstance(new_status, str):
-            raise TypeError("Status must be a string")
+            raise CoachTypeError("Status must be a string")
         clean = new_status.strip().upper()
         if clean not in AIRecommendation.ALLOWED_STATUSES:
-            raise ValueError(f"Status must be one of: {', '.join(AIRecommendation.ALLOWED_STATUSES)}")
+            raise InvalidRecommendationError(f"Status must be one of: {', '.join(AIRecommendation.ALLOWED_STATUSES)}")
         self._status = clean
 
     # --- Domain Methods ---
@@ -112,5 +113,5 @@ class AIRecommendation:
     def add_feedback(self, feedback: RecommendationFeedback) -> None:
         """Appends a validated RecommendationFeedback object (composition relationship)."""
         if not isinstance(feedback, RecommendationFeedback):
-            raise TypeError("Feedback must be an instance of RecommendationFeedback")
+            raise CoachTypeError("Feedback must be an instance of RecommendationFeedback")
         self.feedbacks.append(feedback)
