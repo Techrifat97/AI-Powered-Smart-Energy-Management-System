@@ -2,5 +2,7 @@ from django.apps import AppConfig
 
 
 class AnalysisConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
-    name = "analysis"
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'analysis'
+    verbose_name = 'Subsystem 3: Energy Cost Analysis & Alerts'
+
