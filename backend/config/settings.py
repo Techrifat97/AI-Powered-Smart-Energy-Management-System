@@ -30,6 +30,7 @@ INSTALLED_APPS = [
     # Core Domain Apps (Subsystems)
     'monitoring.apps.MonitoringConfig',
     'coach.apps.CoachConfig',
+    'analysis.apps.AnalysisConfig',
     'accounts.apps.AccountsConfig',
 ]
 

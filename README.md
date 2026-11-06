@@ -51,6 +51,12 @@ CPC Project/
 │   │       ├── forecaster.py       # 7-day diurnal load prediction & confidence bounds
 │   │       ├── scorer.py           # Sustainability score (0-100), grade, carbon footprint
 │   │       └── llm_coach.py        # OpenAI gpt-4o-mini integration & Rule-Based Fallback
+│   ├── analysis/                   # S3: Marwan's Cost, Scenarios & Alerts
+│   │   ├── models.py               # TariffPlan, EnergyAlert, CostReport
+│   │   ├── serializers.py
+│   │   ├── views.py                # Tariff management, alerts, cost analysis APIs
+│   │   ├── urls.py
+│   │   └── admin.py
 │   └── accounts/                   # Shared lightweight user authentication
 ├── frontend/                       # Streamlit application dashboard
 ├── .env.example                    # Template environment variables
@@ -262,7 +268,7 @@ The following three endpoints demonstrate end-to-end data transfer between **Sub
 To run the full suite of automated tests verifying S1 and S2 API endpoints:
 
 ```powershell
-python backend/manage.py test monitoring coach
+python backend/manage.py test monitoring coach analysis
 ```
 ```text
 Creating test database for alias 'default'...

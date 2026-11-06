@@ -10,8 +10,10 @@ urlpatterns = [
     # Subsystem Namespaced APIs
     path('api/monitoring/', include('monitoring.urls')),
     path('api/coach/', include('coach.urls')),
+    path('api/analysis/', include('analysis.urls')),
 
     # Convenience shortcuts for direct demo presentation
     path('api/', include('monitoring.urls')),
     path('api/', include('coach.urls')),
+    path('api/', include('analysis.urls')),
 ]
