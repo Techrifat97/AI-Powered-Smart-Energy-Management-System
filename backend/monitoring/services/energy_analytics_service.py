@@ -6,6 +6,7 @@ from ..domain.building import Building
 from ..domain.consumption_summary import ConsumptionSummary
 from ..domain.validation import validate_utc_timestamp
 from .reading_validator import ReadingValidator
+from ..errors import InvalidSummaryError, MonitoringTypeError
 
 
 class EnergyAnalyticsService:
@@ -14,11 +15,11 @@ class EnergyAnalyticsService:
     def summarize(self, building: Building, start, end) -> ConsumptionSummary:
         """Peak is the maximum individual load reading, not a building-wide peak."""
         if not isinstance(building, Building):
-            raise TypeError("Expected a Building object")
+            raise MonitoringTypeError("Expected a Building object")
         validate_utc_timestamp(start, "Start")
         validate_utc_timestamp(end, "End")
         if start >= end:
-            raise ValueError("Start must be before end")
+            raise InvalidSummaryError("Start must be before end")
 
         category_totals = {
             "HVAC": Decimal("0"), "LIGHTING": Decimal("0"), "PLUG": Decimal("0")
