@@ -15,6 +15,7 @@
 | **Marwan Ahmed** | 7226233 | MDT | S3 — Cost, Scenarios & Alerts |
 
 * **Repository:** [AI-Powered-Smart-Energy-Management-System](https://github.com/Techrifat97/AI-Powered-Smart-Energy-Management-System)
+* **Video Demonstration:** [Assignment 3 API Demonstration Video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
 
 ---
 
@@ -129,6 +130,8 @@ python backend/manage.py runserver
 ---
 
 ## 4. Implemented Web APIs (Hometask 3 Demonstration)
+
+> 📹 **Demo Walkthrough Video:** [Watch the Assignment 3 Video Demonstration](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
 
 The following three endpoints demonstrate end-to-end data transfer between **Subsystem 1 (Monitoring)** and **Subsystem 2 (Forecasting & AI Coach)**:
 
