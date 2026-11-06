@@ -1,10 +1,12 @@
 
+from .energy_reading import EnergyReading
+
 class Meter:
     def __init__(self, meter_id, category, unit, is_active=True):
         self.id = meter_id
-        self.category = category
+        self.set_category(category)
         self.unit = unit
-        self.is_active = is_active
+        self.set_status(is_active)
         self.readings = []
 
     def get_id(self):
@@ -28,22 +30,21 @@ class Meter:
         self.unit = new_unit
 
     def set_status(self, status):
+        if not isinstance(status, bool):
+            raise ValueError("Meter status must be True or False")
         self.is_active = status
 
     def add_reading(self, reading):
+        if not isinstance(reading, EnergyReading):
+            raise TypeError("Expected an EnergyReading object")
         self.readings.append(reading)
 
     def latest_reading(self):
         if not self.readings:
             return None
 
-        return max(self.readings, key=lambda reading: reading.timestamp)
-
-
-meter1 = Meter(1, "HVAC", "kWh")
-
-print(meter1.get_category())
-print(meter1.get_status())
-
-meter1.set_status(False)
-print(meter1.get_status())
+        latest = self.readings[0]
+        for reading in self.readings:
+            if reading.timestamp > latest.timestamp:
+                latest = reading
+        return latest
