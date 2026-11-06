@@ -1,10 +1,8 @@
 # AI-Powered Smart Energy Management System
 
-**Group 25**
+## Project Introduction
 
-This is our Capstone project for the Compact Programming course at FH Dortmund. We are developing a system that monitors energy consumption in buildings, analyzes energy usage, and provides recommendations to help reduce energy waste.
-
-For Home Assignment 1, we focused on the object-oriented programming part of the project. Each subsystem started with at least three Python classes using constructors, attributes, getters, setters, and basic methods. S1 now includes seven classes for monitoring, validation, ingestion, and analysis.
+We are Group 25 from the Compact Programming course at FH Dortmund. Our project aims to monitor energy usage in buildings, analyse consumption and support energy-saving decisions. For Hometask 1, we implemented the Python classes for our three subsystems.
 
 ## Team Members
 
@@ -14,92 +12,95 @@ For Home Assignment 1, we focused on the object-oriented programming part of the
 | Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability & AI Coach | AIRecommendation, RecommendationFeedback, LLMRequestLog |
 | Marwan Ahmed | 7226233 | MDT | S3 — Cost, Scenarios & Alerts | TariffPlan, CostCalculator, EnergyBudget, ScenarioSimulator, ScenarioResult, BaselineAnomalyDetector, AlertService, Notification |
 
-## Our Implementation
+## Hometask 1 Objective
 
-We divided the project into three subsystems so that each member could work on their own part.
+Our assignment focuses on Object-Oriented Programming (OOP). We use classes to describe parts of our system and create objects to work with them. Constructors (`__init__`) set up each object, and attributes store its data. Getters read values, while setters update them and check inputs where needed.
 
-**S1 — Energy Monitoring & Data Management**
+Instance methods let our objects perform actions, such as adding a reading or acknowledging a notification. We practise encapsulation by providing methods to access and update data. We also show relationships between classes: a building contains meters, and each meter stores energy readings.
 
-This part handles building information, energy meters, and energy readings. The `Building` class manages the meters in a building, while the `Meter` class stores readings and keeps track of whether a meter is active. The `EnergyReading` class represents an individual energy measurement.
+## S1 — Energy Monitoring & Data Management
 
-The four additional classes build on these existing objects:
+We implemented seven classes for monitoring and summarising energy usage:
 
-- `ReadingValidator` checks that the meter is active, the reading is marked valid, consumption is finite and nonnegative, power is finite, and the timestamp is timezone-aware UTC. Validation does not change either object. The original `EnergyReading` constructor still accepts naive timestamps for backward compatibility.
-- `ReadingIngestionService` receives a validator and stores accepted readings through `Meter.add_reading()`. It can ingest one reading or a batch for one meter. It checks the whole batch before adding anything, so a failed validation leaves existing readings unchanged.
-- `ConsumptionSummary` stores the building ID, time interval, load totals, solar generation, net grid energy, peak power, and reading count. Energy values use `Decimal` and become strings in `to_dict()` so serialization preserves their precision. Category totals contain only HVAC, LIGHTING, and PLUG loads.
-- `EnergyAnalyticsService.summarize(building, start, end)` reads eligible readings without changing them. It includes `start` and excludes `end`. Inactive meters and invalid or non-UTC readings are excluded. The reading count includes accepted load and solar readings in the interval.
+- `Building` stores building details and manages its meters, including a list of active meters.
+- `Meter` stores its category, unit and active status. It holds energy readings and finds the latest one by timestamp.
+- `EnergyReading` stores a timestamp, energy consumption, power, source and validity flag. Its `to_dict()` method prepares the data for serialization.
+- `ReadingValidator` checks readings before ingestion. It requires an active meter, a valid reading, finite measurements, nonnegative consumption and a timezone-aware UTC timestamp.
+- `ReadingIngestionService` validates and stores single readings, batches and event dictionaries. It checks a whole batch before storing anything, so a rejected batch leaves existing readings unchanged.
+- `ConsumptionSummary` stores energy totals, category totals, peak power and the reading count for a time interval. It uses `Decimal` for energy values and serializes them as strings to preserve precision.
+- `EnergyAnalyticsService` builds summaries from a building's meters. It separates load consumption from solar generation and calculates net grid energy as load minus solar. A negative result means export. It includes the start of the interval, excludes the end, and skips inactive meters and invalid readings. Peak power is the highest individual load-meter reading.
 
-**Net Grid Energy = Gross Load Energy − Solar Generation**
+Our buildings contain meters, and our meters store readings. The services validate, ingest and summarise this data. Our current implementation stores data in memory.
 
-Solar generation is kept separate from gross consumption. A negative net grid total represents export. The initial `peak_kw` is the maximum individual load-meter power reading, not the coincident peak for the whole building. An empty summary has zero energy, zero readings, and zero peak power.
+## S2 — Sustainability & AI Coach
 
-Version 4 is our Capstone architecture reference. This Hometask 1 implementation keeps storage in memory and supports the existing HVAC, LIGHTING, PLUG, and SOLAR categories. Battery flows, Django/PostgreSQL persistence, authentication, duplicate detection, and a future-timestamp tolerance remain future Capstone work. Summaries recheck the readings currently stored on each meter; they do not maintain a separate ingestion history.
+We implemented three classes for recommendations, feedback and request records:
 
-The planned Hometask 2 integration uses `ReadingIngestionService.ingest_event(meter, event_dict, reading_id)`. It checks that event meter IDs, categories, and activity match the destination meter, converts ISO timestamps ending in `Z` or `+00:00`, and stores the result as a simulated reading. Naive and non-UTC timestamps are rejected. `TelemetryGenerator` remains on `Homeworkassignment-02`; there is no duplicate implementation or cross-branch import here.
+- `AIRecommendation` stores an energy-saving recommendation, estimated savings in kWh, its source (`LLM` or `rules`), status (`NEW`, `ACCEPTED` or `DISMISSED`) and feedback. Methods allow us to accept or dismiss it.
+- `RecommendationFeedback` stores a rating from 1 to 5 and an optional comment. It checks the rating and cleans up the comment.
+- `LLMRequestLog` records the AI model name, execution time in milliseconds, success status and recording time. Its `record()` method updates the request record.
 
-**S2 — Sustainability & AI Coach**
+These classes store recommendation data. AI providers and forecasting services shown in the UML are planned Capstone work.
 
-This part is responsible for energy-saving recommendations. It includes classes for storing recommendations, collecting user feedback, and keeping records of AI model requests.
+## S3 — Cost, Scenarios & Alerts
 
-**S3 — Cost, Scenarios & Alerts**
+We implemented eight classes to support energy cost decisions:
 
-This part estimates energy costs and checks spending against monthly budgets. `TariffPlan` stores the electricity price, `EnergyBudget` tracks spending, and `CostCalculator` calculates energy costs and monthly projections. `ScenarioSimulator` estimates how energy-saving changes affect costs, and `ScenarioResult` stores the results.
+- `TariffPlan` stores the electricity price per kWh and its start date.
+- `CostCalculator` estimates electricity costs and projects monthly costs from daily consumption.
+- `EnergyBudget` stores a monthly spending limit, tracks costs and checks whether a projection exceeds the limit.
+- `ScenarioSimulator` estimates how percentage reductions in energy usage affect grid energy and monthly costs.
+- `ScenarioResult` stores the simulated grid energy, monthly cost and savings, and provides `to_dict()` for serialization.
+- `BaselineAnomalyDetector` compares energy readings with a baseline and identifies unusually high usage.
+- `AlertService` checks budget overruns and anomalies, then creates notifications.
+- `Notification` stores a message, severity and creation time, and lets us acknowledge it.
 
-`BaselineAnomalyDetector` compares energy readings with a baseline to find unusually high usage. `AlertService` checks budget overruns and anomalies, then creates `Notification` objects that users can acknowledge.
+We have implemented and tested the three subsystems separately. Their interfaces are not yet fully connected.
 
 ## UML Class Diagrams
 
-We created UML class diagrams for each subsystem to show the class structure and relationships. The diagrams also include some classes that we plan to implement later in the Capstone project.
+Our diagrams show the class structures and relationships. They also include planned Capstone classes and connections. The Python implementation for Hometask 1 includes only the seven S1, three S2 and eight S3 classes described above.
 
 ### S1 — Energy Monitoring & Data Management
 
-![S1 Hometask 1 class diagram](docs/uml/s1-hometask1.png)
-
-[Editable Mermaid source](docs/uml/s1-hometask1.mmd) · [Full-size SVG](docs/uml/s1-hometask1.svg)
-
-The diagram shows the seven implemented S1 classes, their attributes and main public methods. `TelemetryGenerator` is marked as an external Hometask 2 component with a planned connection. The shared validation functions are helpers, not additional classes.
+![S1 UML Class Diagram](docs/uml/s1-hometask1.png)
 
 ### S2 — Sustainability & AI Coach
 
-![S2 class diagram](docs/uml/s2-coach.png)
+![S2 UML Class Diagram](docs/uml/s2-coach.png)
 
 ### S3 — Cost, Scenarios & Alerts
 
-![S3 Cost, Scenarios & Alerts class diagram](docs/uml/s3-decisions.png)
+![S3 UML Class Diagram](docs/uml/s3-decisions.png)
 
 ## Project Structure
 
-Our Python classes are organized into separate folders for each subsystem.
+We keep each subsystem's code and tests in its own folder:
 
 ```text
-backend/
-    monitoring/
-        domain/
-        services/
-        tests/
-    coach/
-        domain/
-        tests/
-    decisions/
-        domain/
-        services/
-        tests/
-
-docs/
-    uml/
+.
+├── backend/
+│   ├── monitoring/
+│   │   ├── domain/
+│   │   ├── services/
+│   │   └── tests/
+│   ├── coach/
+│   │   ├── domain/
+│   │   └── tests/
+│   └── decisions/
+│       ├── domain/
+│       ├── services/
+│       └── tests/
+├── docs/
+│   └── uml/
+└── README.md
 ```
 
-The `domain` folders contain our Python classes, and the `tests` folders contain the test files.
+## Running the Unit Tests
 
-For S1, `domain/consumption_summary.py` contains the summary object. The `services` folder contains `reading_validator.py`, `reading_ingestion_service.py`, and `energy_analytics_service.py`. The small `domain/validation.py` helper shares UTC checks and Decimal conversion between these classes.
+We use Python's built-in `unittest` framework. Run these commands from the project root.
 
-## Running the Tests
-
-We used Python's built-in `unittest` module to test our classes.
-
-Run these commands from the main project folder:
-
-**S1 — Energy Monitoring**
+**S1 — Energy Monitoring & Data Management**
 
 ```bash
 python3 -m unittest discover -s backend/monitoring/tests -v
@@ -117,8 +118,20 @@ python3 -m unittest discover -s backend/coach/tests -v
 python3 -m unittest discover -s backend/decisions/tests -v
 ```
 
+Our latest test run passed all 36 test methods:
+
+| Subsystem | Test methods | Result |
+|---|---:|---|
+| S1 | 12 | Passed |
+| S2 | 14 | Passed |
+| S3 | 10 | Passed |
+
+Our S1 tests use `subTest()` to check related valid inputs, invalid inputs and edge cases within the 12 methods.
+
 ## Video Presentation
 
-Our Hometask 1 team presentation is available here:
+**Video presentation:** To be added after recording the updated presentation.
 
-**Video link:** [Watch the Hometask 1 presentation](https://drive.google.com/file/d/1CrDGMJruxwF7Y-yy8LFkol5h9B4SZE-J/view?usp=sharing)
+## Conclusion
+
+We implemented 18 classes across our three subsystems. Through this assignment, we practised creating objects, checking inputs, using encapsulation and connecting related classes. Our unit tests help us check that these objects behave as expected.
