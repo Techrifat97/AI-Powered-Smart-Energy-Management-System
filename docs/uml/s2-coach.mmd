@@ -1,0 +1,83 @@
+%%{init: {"theme": "base", "themeVariables": {"primaryColor": "#f5f3ff", "primaryTextColor": "#0f172a", "primaryBorderColor": "#6d28d9", "lineColor": "#475569", "fontFamily": "Arial", "fontSize": "16px"}, "class": {"hideEmptyMembersBox": true}}}%%
+classDiagram
+    direction TB
+
+    class ConsumptionForecaster {
+        <<service>>
+        +int window_days = 7
+        +forecast(summary) ForecastResult
+    }
+
+    class ForecastResult {
+        <<value object>>
+        +Decimal forecast_kwh
+        +int horizon_days
+        +mae(actual) float
+    }
+
+    class SustainabilityScorer {
+        <<service>>
+        +float target_kwh_m2
+        +float co2_kg_per_kwh = 0.35
+        +score(summary) int
+        +co2_kg(summary) float
+    }
+
+    class SustainabilityCoach {
+        <<service>>
+        +list~Provider~ providers
+        +advise(summary) list
+    }
+
+    class RecommendationProvider {
+        <<abstract>>
+        +str name
+        +generate(ctx)* list
+    }
+
+    class OpenAIProvider {
+        <<provider>>
+        +str model
+        +int timeout_s = 15
+        +generate(ctx) list
+    }
+
+    class RuleBasedProvider {
+        <<provider>>
+        +list~Rule~ rules
+        +generate(ctx) list
+    }
+
+    class AIRecommendation {
+        <<entity>>
+        +str title
+        +Decimal saving_kwh
+        +str source
+        +str _status
+        +accept() void
+        +dismiss() void
+    }
+
+    class RecommendationFeedback {
+        <<entity>>
+        +int rating
+        +str comment
+        +validate() bool
+    }
+
+    class LLMRequestLog {
+        <<entity>>
+        +str model
+        +int latency_ms
+        +bool success
+        +record() void
+    }
+
+    ConsumptionForecaster ..> ForecastResult : creates
+    SustainabilityCoach "1" *-- "1..*" RecommendationProvider : providers
+    RecommendationProvider <|-- OpenAIProvider : inherits
+    RecommendationProvider <|-- RuleBasedProvider : inherits
+    RecommendationProvider ..> AIRecommendation : creates
+    OpenAIProvider ..> LLMRequestLog : logs
+    AIRecommendation "1" *-- "0..*" RecommendationFeedback : feedbacks
+
