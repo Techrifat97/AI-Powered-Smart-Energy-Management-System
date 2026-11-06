@@ -1,12 +1,17 @@
 """
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
+URL configuration for the Smart Energy Management System.
 """
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Subsystem Namespaced APIs
+    path('api/monitoring/', include('monitoring.urls')),
+    path('api/coach/', include('coach.urls')),
+
+    # Convenience shortcuts for direct demo presentation
+    path('api/', include('monitoring.urls')),
+    path('api/', include('coach.urls')),
 ]
