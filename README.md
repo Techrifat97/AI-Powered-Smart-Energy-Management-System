@@ -117,6 +117,22 @@ python3 -m unittest discover -s backend/coach/tests -v
 python3 -m unittest discover -s backend/decisions/tests -v
 ```
 
+## Error Handling (Hometask 4)
+
+Each subsystem has its own `errors.py` with a custom exception hierarchy and an error-handling class.
+
+| Subsystem | Module | Base exception | Handler class |
+|---|---|---|---|
+| S1 Monitoring | `backend/monitoring/errors.py` | `MonitoringError` | `MonitoringErrorHandler` |
+| S2 Coach | `backend/coach/errors.py` | `CoachError` | `CoachErrorHandler` |
+| S3 Decisions | `backend/decisions/errors.py` | `DecisionsError` | `DecisionsErrorHandler` |
+
+- Specific exceptions such as `InvalidMeterError`, `InvalidFeedbackError` and `InvalidTariffError` replace the plain `ValueError` and `TypeError` raises. Each carries a `code` such as `INVALID_METER`.
+- They also inherit from `ValueError` or `TypeError`, so older code that catches those still works.
+- Each handler has `handle(error)` and `safe_call(func, ...)`. They return `{"ok": True, "value": ...}` or `{"ok": False, "code": ..., "error": ...}` and log the failure. Unknown exceptions get the code `UNEXPECTED_ERROR`.
+
+The error tests are in `backend/<app>/tests/test_errors.py` (7 for S1, 6 for S2, 10 for S3).
+
 ## Video Presentation
 
 Our Hometask 1 team presentation is available here:
