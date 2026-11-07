@@ -1,140 +1,233 @@
 # AI-Powered Smart Energy Management System
 
-**Group 25**
+Group 25 | Compact Programming | FH Dortmund
 
-This is our Capstone project for the Compact Programming course at FH Dortmund. We are developing a system that monitors energy consumption in buildings, analyzes energy usage, and provides recommendations to help reduce energy waste.
+# Hometask 4: Exception Handling and Unit Tests
 
-For Home Assignment 1, we focused on the object-oriented programming part of the project. Each subsystem started with at least three Python classes using constructors, attributes, getters, setters, and basic methods. S1 now includes seven classes for monitoring, validation, ingestion, and analysis.
+## 1. About the Hometask
 
-## Team Members
+Our Capstone project is an AI-Powered Smart Energy Management System. For Hometask 4, we focused on **error handling** and **automated testing** in Python.
 
-| Member | Student ID | Program | Subsystem | Python Classes |
-|---|---|---|---|---|
-| Rifat Ali Shaon | 7225871 | MDT | S1 — Energy Monitoring & Data Management | Building, Meter, EnergyReading, ReadingValidator, ReadingIngestionService, ConsumptionSummary, EnergyAnalyticsService |
-| Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability & AI Coach | AIRecommendation, RecommendationFeedback, LLMRequestLog |
-| Marwan Ahmed | 7226233 | MDT | S3 — Cost, Scenarios & Alerts | TariffPlan, CostCalculator, EnergyBudget, ScenarioSimulator, ScenarioResult, BaselineAnomalyDetector, AlertService, Notification |
+The assignment asks for two things:
 
-## Our Implementation
+1. An error-handling class for each subsystem.
+2. At least 15 different tests.
 
-We divided the project into three subsystems so that each member could work on their own part.
+Before this hometask, our code raised plain `ValueError` and `TypeError` exceptions. A caller could not tell which problem had happened or which subsystem it came from. We replaced them with custom exceptions and added one error-handling class per subsystem.
 
-**S1 — Energy Monitoring & Data Management**
+This assignment is implemented in plain Python. It needs no database, web interface or external library.
 
-This part handles building information, energy meters, and energy readings. The `Building` class manages the meters in a building, while the `Meter` class stores readings and keeps track of whether a meter is active. The `EnergyReading` class represents an individual energy measurement.
+| Requirement | Our answer |
+|---|---|
+| Error-handling class per subsystem | `MonitoringErrorHandler` (S1), `CoachErrorHandler` (S2), `DecisionsErrorHandler` (S3) |
+| 15 different tests | 23 new tests in three `test_errors.py` files |
+| GitHub link | Branch `Homeworkassignment-04` |
 
-The four additional classes build on these existing objects:
+## 2. Team Members
 
-- `ReadingValidator` checks that the meter is active, the reading is marked valid, consumption is finite and nonnegative, power is finite, and the timestamp is timezone-aware UTC. Validation does not change either object. The original `EnergyReading` constructor still accepts naive timestamps for backward compatibility.
-- `ReadingIngestionService` receives a validator and stores accepted readings through `Meter.add_reading()`. It can ingest one reading or a batch for one meter. It checks the whole batch before adding anything, so a failed validation leaves existing readings unchanged.
-- `ConsumptionSummary` stores the building ID, time interval, load totals, solar generation, net grid energy, peak power, and reading count. Energy values use `Decimal` and become strings in `to_dict()` so serialization preserves their precision. Category totals contain only HVAC, LIGHTING, and PLUG loads.
-- `EnergyAnalyticsService.summarize(building, start, end)` reads eligible readings without changing them. It includes `start` and excludes `end`. Inactive meters and invalid or non-UTC readings are excluded. The reading count includes accepted load and solar readings in the interval.
-
-**Net Grid Energy = Gross Load Energy − Solar Generation**
-
-Solar generation is kept separate from gross consumption. A negative net grid total represents export. The initial `peak_kw` is the maximum individual load-meter power reading, not the coincident peak for the whole building. An empty summary has zero energy, zero readings, and zero peak power.
-
-Version 4 is our Capstone architecture reference. This Hometask 1 implementation keeps storage in memory and supports the existing HVAC, LIGHTING, PLUG, and SOLAR categories. Battery flows, Django/PostgreSQL persistence, authentication, duplicate detection, and a future-timestamp tolerance remain future Capstone work. Summaries recheck the readings currently stored on each meter; they do not maintain a separate ingestion history.
-
-The planned Hometask 2 integration uses `ReadingIngestionService.ingest_event(meter, event_dict, reading_id)`. It checks that event meter IDs, categories, and activity match the destination meter, converts ISO timestamps ending in `Z` or `+00:00`, and stores the result as a simulated reading. Naive and non-UTC timestamps are rejected. `TelemetryGenerator` remains on `Homeworkassignment-02`; there is no duplicate implementation or cross-branch import here.
-
-**S2 — Sustainability & AI Coach**
-
-This part is responsible for energy-saving recommendations. It includes classes for storing recommendations, collecting user feedback, and keeping records of AI model requests.
-
-**S3 — Cost, Scenarios & Alerts**
-
-This part estimates energy costs and checks spending against monthly budgets. `TariffPlan` stores the electricity price, `EnergyBudget` tracks spending, and `CostCalculator` calculates energy costs and monthly projections. `ScenarioSimulator` estimates how energy-saving changes affect costs, and `ScenarioResult` stores the results.
-
-`BaselineAnomalyDetector` compares energy readings with a baseline to find unusually high usage. `AlertService` checks budget overruns and anomalies, then creates `Notification` objects that users can acknowledge.
-
-## UML Class Diagrams
-
-We created UML class diagrams for each subsystem to show the class structure and relationships. The diagrams also include some classes that we plan to implement later in the Capstone project.
-
-### S1 — Energy Monitoring & Data Management
-
-![S1 Hometask 1 class diagram](docs/uml/s1-hometask1.png)
-
-[Editable Mermaid source](docs/uml/s1-hometask1.mmd) · [Full-size SVG](docs/uml/s1-hometask1.svg)
-
-The diagram shows the seven implemented S1 classes, their attributes and main public methods. `TelemetryGenerator` is marked as an external Hometask 2 component with a planned connection. The shared validation functions are helpers, not additional classes.
-
-### S2 — Sustainability & AI Coach
-
-![S2 class diagram](docs/uml/s2-coach.png)
-
-### S3 — Cost, Scenarios & Alerts
-
-![S3 Cost, Scenarios & Alerts class diagram](docs/uml/s3-decisions.png)
-
-## Project Structure
-
-Our Python classes are organized into separate folders for each subsystem.
-
-```text
-backend/
-    monitoring/
-        domain/
-        services/
-        tests/
-    coach/
-        domain/
-        tests/
-    decisions/
-        domain/
-        services/
-        tests/
-
-docs/
-    uml/
-```
-
-The `domain` folders contain our Python classes, and the `tests` folders contain the test files.
-
-For S1, `domain/consumption_summary.py` contains the summary object. The `services` folder contains `reading_validator.py`, `reading_ingestion_service.py`, and `energy_analytics_service.py`. The small `domain/validation.py` helper shares UTC checks and Decimal conversion between these classes.
-
-## Running the Tests
-
-We used Python's built-in `unittest` module to test our classes.
-
-Run these commands from the main project folder:
-
-**S1 — Energy Monitoring**
-
-```bash
-python3 -m unittest discover -s backend/monitoring/tests -v
-```
-
-**S2 — Sustainability & AI Coach**
-
-```bash
-python3 -m unittest discover -s backend/coach/tests -v
-```
-
-**S3 — Cost, Scenarios & Alerts**
-
-```bash
-python3 -m unittest discover -s backend/decisions/tests -v
-```
-
-## Error Handling (Hometask 4)
-
-Each subsystem has its own `errors.py` with a custom exception hierarchy and an error-handling class.
-
-| Subsystem | Module | Base exception | Handler class |
+| Name | Student ID | Programme | Subsystem |
 |---|---|---|---|
-| S1 Monitoring | `backend/monitoring/errors.py` | `MonitoringError` | `MonitoringErrorHandler` |
-| S2 Coach | `backend/coach/errors.py` | `CoachError` | `CoachErrorHandler` |
-| S3 Decisions | `backend/decisions/errors.py` | `DecisionsError` | `DecisionsErrorHandler` |
+| Rifat Ali Shaon | 7225871 | MDT | S1: Energy Monitoring & Data Management |
+| Syed Yasoob Raza | 7226703 | ESE | S2: Sustainability & AI Coach |
+| Marwan Ahmed | 7226233 | MDT | S3: Cost, Scenarios & Alerts |
 
-- Specific exceptions such as `InvalidMeterError`, `InvalidFeedbackError` and `InvalidTariffError` replace the plain `ValueError` and `TypeError` raises. Each carries a `code` such as `INVALID_METER`.
-- They also inherit from `ValueError` or `TypeError`, so older code that catches those still works.
-- Each handler has `handle(error)` and `safe_call(func, ...)`. They return `{"ok": True, "value": ...}` or `{"ok": False, "code": ..., "error": ...}` and log the failure. Unknown exceptions get the code `UNEXPECTED_ERROR`.
+## 3. Python Concepts Used
 
-The error tests are in `backend/<app>/tests/test_errors.py` (7 for S1, 6 for S2, 10 for S3).
+| Concept | Implementation |
+|---|---|
+| Custom exceptions | Each subsystem defines its own exception classes, such as `InvalidMeterError` and `InvalidTariffError`. |
+| Inheritance | All errors of a subsystem inherit from one base class (`MonitoringError`, `CoachError`, `DecisionsError`). |
+| Multiple inheritance | S1 and S2 combine their base class with a built-in one, for example `MonitoringValueError(MonitoringError, ValueError)`. |
+| `try / except` | `safe_call()` catches errors and turns them into a result dictionary. |
+| Unit testing | `unittest.TestCase`, `setUp`, `assertRaises`, `assertEqual`, `assertTrue`, `assertIsInstance`. |
 
-## Video Presentation
+## 4. Main Classes
 
-Our Hometask 1 team presentation is available here:
+Each subsystem has an `errors.py` file with a base exception, specific exceptions and one handler class.
 
-**Video link:** [Watch the Hometask 1 presentation](https://drive.google.com/file/d/1CrDGMJruxwF7Y-yy8LFkol5h9B4SZE-J/view?usp=sharing)
+| Subsystem | Module | Base exception | Specific exceptions | Handler |
+|---|---|---|---|---|
+| S1 Monitoring | `backend/monitoring/errors.py` | `MonitoringError` | `InvalidReadingError`, `InvalidMeterError`, `InvalidBuildingError`, `InvalidEventError`, `InvalidSummaryError` | `MonitoringErrorHandler` |
+| S2 Coach | `backend/coach/errors.py` | `CoachError` | `InvalidRecommendationError`, `InvalidFeedbackError`, `InvalidLLMLogError` | `CoachErrorHandler` |
+| S3 Decisions | `backend/decisions/errors.py` | `DecisionsError` | `InvalidTariffError`, `InvalidBudgetError`, `InvalidNotificationError`, `InvalidEnergyValueError`, `InvalidScenarioError`, `InvalidThresholdError` | `DecisionsErrorHandler` |
+
+S1 and S2 also have `MonitoringValueError` / `MonitoringTypeError` and `CoachValueError` / `CoachTypeError`. They are used for wrong-type problems and as parents of the specific errors.
+
+Every exception has a short `code` string, such as `INVALID_METER` or `INVALID_TARIFF`, that a program or log can read.
+
+## 5. How Error Handling Works
+
+### The exception hierarchy
+
+The S3 hierarchy:
+
+```
+ValueError
+   └── DecisionsError                 <- catches any S3 problem
+          ├── InvalidTariffError
+          ├── InvalidBudgetError
+          ├── InvalidNotificationError
+          ├── InvalidEnergyValueError
+          ├── InvalidScenarioError
+          └── InvalidThresholdError
+```
+
+- `except DecisionsError` catches any S3 problem, and nothing from S1 or S2.
+- `except InvalidTariffError` catches only that one problem.
+- The errors still inherit from `ValueError` or `TypeError`, so older code and tests that catch those keep working.
+
+### Raising the new exceptions
+
+We replaced the plain raises. The message stays the same and only the type is more precise:
+
+```python
+# before
+raise ValueError("Price per kWh must be positive")
+# after
+raise InvalidTariffError("Price per kWh must be positive")
+```
+
+This was done in 17 source files across S1, S2 and S3.
+
+### The error-handling class
+
+```python
+class DecisionsErrorHandler:
+    def handle(self, error):
+        if isinstance(error, DecisionsError):
+            code = error.code
+        else:
+            code = "UNEXPECTED_ERROR"
+        logger.warning("%s: %s", code, error)
+        return {"ok": False, "code": code, "error": str(error)}
+
+    def safe_call(self, func, *args, **kwargs):
+        try:
+            return {"ok": True, "value": func(*args, **kwargs)}
+        except Exception as error:
+            return self.handle(error)
+```
+
+- `handle(error)` turns an exception into a dictionary and writes a log line. Unknown exceptions get the code `UNEXPECTED_ERROR`.
+- `safe_call(func, ...)` runs a function and never crashes. It returns `{"ok": True, "value": ...}` on success and the handled error dictionary on failure.
+
+Example:
+
+```python
+handler = DecisionsErrorHandler()
+handler.safe_call(EnergyBudget, 1, 1200)
+# {'ok': True, 'value': <EnergyBudget ...>}
+
+handler.safe_call(EnergyBudget, 1, 0)
+# {'ok': False, 'code': 'INVALID_BUDGET', 'error': 'Monthly limit must be positive'}
+```
+
+`safe_call` catches `Exception` but not `BaseException`, so Ctrl+C and `SystemExit` still stop the program.
+
+## 6. Project Structure
+
+```
+AI-Powered-Smart-Energy-Management-System/
+|
+|-- backend/
+|   |-- monitoring/
+|   |   |-- errors.py
+|   |   |-- tests/
+|   |       |-- test_errors.py
+|   |-- coach/
+|   |   |-- errors.py
+|   |   |-- tests/
+|   |       |-- test_errors.py
+|   |-- decisions/
+|       |-- errors.py
+|       |-- tests/
+|           |-- test_errors.py
+|
+|-- README.md
+```
+
+Only the files added for this hometask are shown. The domain and service classes were edited to raise the new exceptions.
+
+## 7. Unit Testing
+
+We used Python's built-in `unittest` framework. We added 23 tests, which is more than the 15 required, because each subsystem has several exception types to cover.
+
+| Subsystem | File | Tests |
+|---|---|---|
+| S1 | `backend/monitoring/tests/test_errors.py` | 7 |
+| S2 | `backend/coach/tests/test_errors.py` | 6 |
+| S3 | `backend/decisions/tests/test_errors.py` | 10 |
+
+The tests fall into three kinds:
+
+1. **Hierarchy tests** check that the new exceptions inherit correctly.
+2. **Raising tests** check that bad input raises exactly the right exception.
+3. **Handler tests** check that `safe_call` returns the right dictionary for success, a known error and an unexpected error.
+
+The S3 tests:
+
+| Test | Checks |
+|---|---|
+| hierarchy keeps `ValueError` compatibility | inheritance |
+| zero price raises `InvalidTariffError` | tariff validation |
+| negative cost raises `InvalidBudgetError` | budget validation |
+| unknown severity raises `InvalidNotificationError` | notification validation |
+| negative energy raises `InvalidEnergyValueError` | calculator validation |
+| reduction over 100% raises `InvalidScenarioError` | simulator validation |
+| zero threshold raises `InvalidThresholdError` | detector validation |
+| `safe_call` success | `ok` is `True` |
+| `safe_call` known error | `code` is `INVALID_BUDGET` |
+| `safe_call` unexpected error | `code` is `UNEXPECTED_ERROR` |
+
+Example:
+
+```python
+def test_negative_cost_raises_invalid_budget(self):
+    with self.assertRaises(InvalidBudgetError):
+        EnergyBudget(1, 100).add_cost(-1)
+```
+
+The tests are plain `unittest`. Django's test runner also understands them, because `django.test.TestCase` is built on `unittest.TestCase`. They test domain classes directly, so they need no database.
+
+## 8. Running the Tests
+
+The project uses Python 3.9 or later. Run these commands from the project root:
+
+```
+python -m unittest discover -s backend/monitoring/tests -t .
+python -m unittest discover -s backend/coach/tests -t .
+python -m unittest discover -s backend/decisions/tests -t .
+```
+
+Test results:
+
+| Subsystem | Tests passed | Tests failed |
+|---|---|---|
+| S1 Monitoring | 78 | 0 |
+| S2 Coach | 20 | 0 |
+| S3 Decisions | 20 | 0 |
+
+These totals include the earlier tests, so the existing tests kept passing without changes.
+
+To run only the error tests of one subsystem:
+
+```
+python -m unittest backend.decisions.tests.test_errors -v
+```
+
+## 9. Video Presentation
+
+A five-minute solo presentation explains the exception hierarchy, the error-handling classes and the tests, and shows the tests running in the terminal.
+
+Video presentation: [Watch the Hometask 4 video on Google Drive](https://drive.google.com/file/d/1i5s8o47MhYzSRGU9pMzjNyPP0mN5aR8j/view?usp=sharing)
+
+## 10. Conclusion
+
+Each subsystem now has its own exception hierarchy and a handler class that returns one predictable result format for every failure.
+
+Known limitations:
+
+- The handler code is repeated in the three `errors.py` files. `manage.py` and the unittest command resolve imports differently, so each subsystem keeps its own copy.
+- The new tests focus on failure paths. The success paths are covered by the earlier tests.
+- A non-numeric string passed to the cost estimator fails inside Python's `decimal` module. This is not yet wrapped in a custom exception, so the handler labels it `UNEXPECTED_ERROR`.
+- The streaming package from Hometask 2 still uses plain `ValueError` and `TypeError`.
