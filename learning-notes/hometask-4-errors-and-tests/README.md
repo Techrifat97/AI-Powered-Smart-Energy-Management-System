@@ -215,7 +215,13 @@ To run only the error tests of one subsystem:
 python -m unittest backend.decisions.tests.test_errors -v
 ```
 
-## 9. Conclusion
+## 9. Video Presentation
+
+A five-minute solo presentation explains the exception hierarchy, the error-handling classes and the tests, and shows the tests running in the terminal.
+
+Video presentation: [Watch the Hometask 4 video on Google Drive](https://drive.google.com/file/d/1i5s8o47MhYzSRGU9pMzjNyPP0mN5aR8j/view?usp=sharing)
+
+## 10. Conclusion
 
 Each subsystem now has its own exception hierarchy and a handler class that returns one predictable result format for every failure.
 
