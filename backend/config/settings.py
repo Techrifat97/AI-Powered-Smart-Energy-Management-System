@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project: BASE_DIR is the 'backend' folder
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -65,27 +66,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database Configuration (PostgreSQL as primary, with SQLite fallback)
-USE_SQLITE = os.getenv('USE_SQLITE', 'False').lower() in ('true', '1', 't')
+# PostgreSQL is required for development, tests and deployment.
+# Missing configuration must fail clearly instead of selecting another backend.
+database_env = {
+    name: os.getenv(name)
+    for name in ('DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DB_HOST', 'DB_PORT')
+}
+missing_database_env = [name for name, value in database_env.items() if not value]
+if missing_database_env:
+    raise ImproperlyConfigured(
+        'Set the required PostgreSQL environment variables: '
+        + ', '.join(missing_database_env)
+    )
 
-if USE_SQLITE:
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
+database_name = database_env['DB_NAME']
+test_database_name = os.getenv('DB_TEST_NAME', f'test_{database_name}')
+if test_database_name == database_name or not test_database_name.startswith('test_'):
+    raise ImproperlyConfigured(
+        'DB_TEST_NAME must start with test_ and differ from DB_NAME. '
+        'Tests must use a disposable PostgreSQL database.'
+    )
+if any(len(name.encode('utf-8')) > 63 for name in (database_name, test_database_name)):
+    raise ImproperlyConfigured('PostgreSQL database names must be at most 63 bytes long.')
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': database_name,
+        'USER': database_env['DB_USER'],
+        'PASSWORD': database_env['DB_PASSWORD'],
+        'HOST': database_env['DB_HOST'],
+        'PORT': database_env['DB_PORT'],
+        'TEST': {'NAME': test_database_name},
     }
-else:
-    DATABASES = {
-        'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-            'NAME': os.getenv('DB_NAME', 'smart_energy_db'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', 'postgres'),
-            'HOST': os.getenv('DB_HOST', '127.0.0.1'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-        }
-    }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

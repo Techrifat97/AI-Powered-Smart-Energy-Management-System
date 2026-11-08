@@ -22,7 +22,7 @@
 ## 1. System Architecture Overview
 
 The system is built as a unified Python architecture:
-* **Backend:** Django 5.2 + Django REST Framework (DRF) running against **PostgreSQL** (with offline SQLite support via toggle).
+* **Backend:** Django 5.2 + Django REST Framework (DRF), using **PostgreSQL for development, tests and deployment**.
 * **AI Engine (S2):** OpenAI `gpt-4o-mini` with automated token tracking, latency auditing, and a built-in deterministic **Rule-Based Fallback** engine.
 * **Frontend:** Streamlit interactive dashboard communicating with backend REST endpoints.
 * **Dependencies:** Unified single [`requirements.txt`](./requirements.txt) at the root level managing both Django and Streamlit packages.
@@ -79,39 +79,78 @@ python -m venv .venv
 .venv\Scripts\activate
 ```
 
+On macOS or Linux, activate it with `source .venv/bin/activate`.
+
 ### Step 2: Install Unified Dependencies
 ```powershell
 pip install -r requirements.txt
 ```
 
-### Step 3: Configure Environment Variables
-Copy `.env.example` to `.env`:
+### Step 3: Set Up PostgreSQL
+
+Install and start PostgreSQL 14 or newer, as supported by
+[Django 5.2](https://docs.djangoproject.com/en/5.2/ref/databases/#postgresql-notes).
+On macOS, Postgres.app is one option;
+its command-line tools are in `/Applications/Postgres.app/Contents/Versions/latest/bin`.
+On Windows or Linux, use your PostgreSQL installation's tools or package manager.
+
+Open `psql -d postgres` as your local PostgreSQL administrator. Some installations
+use `psql -U postgres -d postgres` instead. Create a development role and database:
+
+```sql
+CREATE ROLE smart_energy_user LOGIN CREATEDB;
+\password smart_energy_user
+CREATE DATABASE smart_energy_db OWNER smart_energy_user;
+```
+
+The `\password` command prompts for a password without putting it in SQL or shell
+history. `CREATEDB` lets Django create a separate disposable database for tests;
+the role does not need superuser permissions. A deployment role does not need
+`CREATEDB` when tests are run separately.
+
+The test role also needs permission to connect to the built-in `postgres`
+database. See [Django's test database setup](https://docs.djangoproject.com/en/5.2/topics/testing/overview/#the-test-database).
+
+### Step 4: Configure Environment Variables
+
+Copy [`.env.example`](./.env.example) to `.env` in the project root. Set your own
+`SECRET_KEY` and database password locally. Keep `.env` out of Git.
+
 ```env
 # Django Settings
-SECRET_KEY=django-insecure-smart-energy-management-2026-key
+SECRET_KEY=replace-with-a-local-development-key
 DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1,testserver,*
+ALLOWED_HOSTS=localhost,127.0.0.1,testserver
 
-# Database Configuration (PostgreSQL)
-# Set USE_SQLITE=True for local offline development without a PostgreSQL server
-USE_SQLITE=False
-DB_ENGINE=django.db.backends.postgresql
+# PostgreSQL: set DB_PASSWORD in your local file before starting Django.
 DB_NAME=smart_energy_db
-DB_USER=postgres
-DB_PASSWORD=your_postgres_password
+DB_USER=smart_energy_user
+DB_PASSWORD=
 DB_HOST=127.0.0.1
 DB_PORT=5432
+DB_TEST_NAME=test_smart_energy_db
 
 # OpenAI API Configuration (S2 Coach Subsystem)
-OPENAI_API_KEY=sk-proj-your-api-key-here
+OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 ```
+
+The database engine is fixed to `django.db.backends.postgresql`. Missing connection
+variables raise a configuration error; a stopped or unreachable server raises a
+connection error. Django never switches to another database backend.
+
+`DB_TEST_NAME` must start with `test_`, differ from `DB_NAME`, and fit PostgreSQL's
+63-byte identifier limit. If omitted, it defaults to `test_` followed by `DB_NAME`.
+Use a dedicated local PostgreSQL instance for tests, never a production server.
+In deployment, supply the same environment variables through your hosting system;
+credentials belong in local configuration or deployment secrets, not source files.
 
 ---
 
 ## 3. Database Migration & Telemetry Seeding
 
-Run the following commands to initialize your database and populate it with 14 days of realistic energy readings:
+For a new development database, run the following commands to initialize it and
+populate it with 14 days of realistic energy readings:
 
 ```powershell
 # 1. Apply schema migrations
@@ -126,6 +165,13 @@ python backend/manage.py createsuperuser
 # 4. Start the Django development server
 python backend/manage.py runserver
 ```
+
+For an existing database, inspect and back up its data before applying Phase 1's
+`monitoring.0002_strengthen_s1_models` migration. Its initial check stops and reports
+invalid numeric values, unsupported meter types/units, or duplicate
+`(meter, timestamp)` readings. It does not delete or repair data automatically.
+Valid hourly demo values and readings on deactivated meters are preserved;
+hourly readings are not converted into 60-second measurements.
 
 ---
 
@@ -268,17 +314,26 @@ The following three endpoints demonstrate end-to-end data transfer between **Sub
 
 ## 5. Automated Unit Tests
 
-To run the full suite of automated tests verifying S1 and S2 API endpoints:
+Tests use PostgreSQL and the normal project settings. Django creates
+`DB_TEST_NAME`, applies migrations there, runs the tests, and drops that test
+database afterwards. The application database is not used as the test database.
+Never set `DB_TEST_NAME` to a database containing data you want to keep.
+
+Run the configuration checks and the S1, S2 and S3 tests from the project root:
 
 ```powershell
-python backend/manage.py test monitoring coach analysis
+python backend/manage.py check --database default
+python backend/manage.py makemigrations --check --dry-run
+python backend/manage.py test config monitoring coach analysis
+git diff --check
 ```
-```text
-Creating test database for alias 'default'...
-...
-----------------------------------------------------------------------
-Ran 3 tests in 0.047s
 
-OK
-Destroying test database for alias 'default'...
-```
+For deterministic tests without external AI calls, leave `OPENAI_API_KEY` empty
+in the test environment so S2 uses its rule-based provider. The S1 tests exercise
+numeric constraints (including NaN and infinity), duplicate protection, history
+retention after deactivation, and migration acceptance/rejection of legacy data.
+
+If PostgreSQL is unavailable, start the server or correct the connection settings.
+Do not substitute another database backend. Tests require permission to create
+and drop their disposable database; migrations and tests must not be run against
+the deployment database as a workaround.
