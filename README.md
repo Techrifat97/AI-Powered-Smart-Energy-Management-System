@@ -75,6 +75,12 @@ CPC Project/
 
 ## 2. Quickstart & Installation
 
+For the local Docker stack (PostgreSQL, one-shot migration, Gunicorn APIs and a
+separate telemetry worker), use the [Docker development guide](docs/docker-development.md).
+Docker has its own persistent database and private `.env.docker`; it does not
+change the Postgres.app database or the local `.env`. The steps below remain the
+host-based setup.
+
 ### Step 1: Create and Activate Virtual Environment
 ```powershell
 # Create virtual environment

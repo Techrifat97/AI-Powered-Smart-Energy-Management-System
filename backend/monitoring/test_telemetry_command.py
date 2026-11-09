@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta, timezone
 from io import StringIO
+import signal
 from unittest.mock import patch
 
 from django.core.management import call_command, CommandError
@@ -92,6 +93,15 @@ class TelemetryCommandTests(SimpleTestCase):
             with patch(f'{COMMAND}.generate_minute', side_effect=KeyboardInterrupt):
                 self.run_command()
         self.assertIn('Stopped synthetic telemetry.', self.stdout.getvalue())
+
+    def test_sigterm_stops_cleanly_and_restores_the_previous_handler(self):
+        previous = signal.getsignal(signal.SIGTERM)
+        with patch(f'{COMMAND}.timezone.now', return_value=self.clock[0]):
+            with patch(f'{COMMAND}.generate_minute', return_value=self.report):
+                with patch(f'{COMMAND}.sleep', side_effect=lambda seconds: signal.raise_signal(signal.SIGTERM)):
+                    self.run_command()
+        self.assertIn('Stopped synthetic telemetry.', self.stdout.getvalue())
+        self.assertEqual(signal.getsignal(signal.SIGTERM), previous)
 
     def test_unavailable_database_stops_without_retry_loop(self):
         with patch(f'{COMMAND}.timezone.now', return_value=self.clock[0]):

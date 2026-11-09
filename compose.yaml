@@ -1,0 +1,74 @@
+name: smart-energy
+
+x-app: &app
+  image: smart-energy-app:local
+  build: .
+  init: true
+  restart: "no"
+  environment:
+    SECRET_KEY: ${DOCKER_SECRET_KEY:?Set DOCKER_SECRET_KEY in .env.docker}
+    DEBUG: "False"
+    ALLOWED_HOSTS: localhost,127.0.0.1,backend,testserver
+    DB_NAME: ${DOCKER_DB_NAME:-smart_energy_db}
+    DB_USER: ${DOCKER_DB_USER:-smart_energy}
+    DB_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD in .env.docker}
+    DB_HOST: db
+    DB_PORT: "5432"
+    DB_TEST_NAME: ${DOCKER_TEST_DB_NAME:-test_smart_energy_docker}
+    OPENAI_API_KEY: ""
+
+services:
+  db:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DOCKER_DB_NAME:-smart_energy_db}
+      POSTGRES_USER: ${DOCKER_DB_USER:-smart_energy}
+      POSTGRES_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD in .env.docker}
+    volumes:
+      # PostgreSQL 18+ uses /var/lib/postgresql/18/docker within this mount.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 30s
+
+  migrate:
+    <<: *app
+    command: ["python", "backend/manage.py", "migrate", "--noinput"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  backend:
+    <<: *app
+    ports:
+      - "127.0.0.1:${DOCKER_BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/buildings/', timeout=3).close()"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    stop_grace_period: 30s
+
+  telemetry:
+    <<: *app
+    command: ["python", "backend/manage.py", "run_telemetry"]
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 20s
+
+volumes:
+  postgres_data:

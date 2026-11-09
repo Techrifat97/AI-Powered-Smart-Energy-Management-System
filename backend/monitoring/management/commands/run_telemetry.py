@@ -1,6 +1,7 @@
 """Minute-boundary scheduler for synthetic S1 telemetry."""
 
 from time import sleep
+import signal
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DatabaseError
@@ -16,6 +17,11 @@ class Command(BaseCommand):
         parser.add_argument('--once', action='store_true', help='Process the latest completed minute and exit.')
 
     def handle(self, *args, **options):
+        def stop(signum, frame):
+            # Reuse the Ctrl+C path; atomic building writes unwind on interruption.
+            raise KeyboardInterrupt
+
+        previous = signal.signal(signal.SIGTERM, stop)
         self.stdout.write('SYNTHETIC telemetry: UTC minute intervals; no downtime backfill.')
         last_minute = None
         try:
@@ -55,3 +61,5 @@ class Command(BaseCommand):
                 f'PostgreSQL operation failed ({type(error).__name__}); synthetic worker stopped. '
                 'Check database availability; use --traceback for details.'
             ) from error
+        finally:
+            signal.signal(signal.SIGTERM, previous)

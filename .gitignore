@@ -17,6 +17,7 @@ db.sqlite3
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # React / Node.js
 node_modules/
