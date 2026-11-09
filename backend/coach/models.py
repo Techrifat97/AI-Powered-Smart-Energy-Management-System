@@ -22,8 +22,8 @@ class ConsumptionForecast(models.Model):
     )
     forecast_date = models.DateField(db_index=True)
     predicted_kwh = models.FloatField(help_text="Expected energy consumption in kWh")
-    confidence_lower_kwh = models.FloatField(help_text="Lower bound (95% confidence interval)")
-    confidence_upper_kwh = models.FloatField(help_text="Upper bound (95% confidence interval)")
+    confidence_lower_kwh = models.FloatField(help_text="Lower illustrative forecast band (not calibrated)")
+    confidence_upper_kwh = models.FloatField(help_text="Upper illustrative forecast band (not calibrated)")
     trend = models.CharField(max_length=20, choices=TREND_CHOICES, default='STABLE')
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -71,7 +71,7 @@ class AIRecommendation(models.Model):
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='MEDIUM')
     suggested_action = models.TextField(help_text="Concrete instructions or setpoints to implement")
     estimated_savings_kwh = models.FloatField(default=0.0, help_text="Estimated energy saved in kWh")
-    estimated_savings_eur = models.FloatField(default=0.0, help_text="Estimated cost savings in Euros")
+    estimated_savings_eur = models.FloatField(null=True, blank=True, default=None, help_text="Unavailable without a priced action scenario")
     confidence_score = models.FloatField(default=0.85, help_text="Model confidence score between 0.0 and 1.0")
     source = models.CharField(
         max_length=30,

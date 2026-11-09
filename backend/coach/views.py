@@ -4,8 +4,10 @@ from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.response import Response
 
-from monitoring.models import Building, EnergyReading
-from coach.models import ConsumptionForecast, AIRecommendation, RecommendationFeedback
+from monitoring.models import Building
+from monitoring.services.aggregation import summarize_building
+from math import fsum
+from coach.models import AIRecommendation, RecommendationFeedback
 from coach.serializers import (
     ConsumptionForecastSerializer,
     AIRecommendationSerializer,
@@ -21,7 +23,7 @@ class BuildingForecastAPIView(APIView):
     """
     Endpoint 2: Subsystem 2 (Forecasting & Prediction).
     Consumes S1 historical telemetry data and generates a 7-day ahead
-    consumption forecast with confidence intervals and trend indicators.
+    heuristic consumption forecast with illustrative bands and baseline comparison.
     """
 
     def get(self, request, building_id):
@@ -29,8 +31,8 @@ class BuildingForecastAPIView(APIView):
         forecaster = ConsumptionForecaster(horizon_days=7)
         forecast_data = forecaster.generate_forecast(building)
 
-        total_predicted = round(sum(d['predicted_kwh'] for d in forecast_data), 2)
-        avg_predicted = round(total_predicted / len(forecast_data), 2) if forecast_data else 0.0
+        total_predicted = round(sum(d['predicted_kwh'] for d in forecast_data), 2) if forecast_data else None
+        avg_predicted = round(total_predicted / len(forecast_data), 2) if forecast_data else None
 
         return Response({
             'building_id': building.id,
@@ -38,6 +40,7 @@ class BuildingForecastAPIView(APIView):
             'horizon_days': 7,
             'total_predicted_7d_kwh': total_predicted,
             'avg_daily_predicted_kwh': avg_predicted,
+            'availability': forecaster.availability,
             'forecast': forecast_data
         }, status=status.HTTP_200_OK)
 
@@ -53,7 +56,7 @@ class GenerateRecommendationsAPIView(APIView):
     2. Runs S2 ConsumptionForecaster to project next week's energy pattern.
     3. Evaluates sustainability score, carbon footprint, and energy grade.
     4. Invokes OpenAI (gpt-4o-mini using OPENAI_API_KEY from .env) or Rule-Based Fallback.
-    5. Persists and returns actionable recommendations with cost and kWh savings.
+    5. Persists recommendations with illustrative kWh scenarios; monetary savings are unavailable.
     """
 
     def post(self, request):
@@ -65,60 +68,43 @@ class GenerateRecommendationsAPIView(APIView):
 
         building = get_object_or_404(Building, id=building_id)
 
-        # 1. Fetch S1 telemetry summary directly
-        electricity_readings = EnergyReading.objects.filter(
-            meter__building=building,
-            meter__meter_type__in=['ELECTRICITY', 'HVAC', 'LIGHTING']
-        )
-        solar_readings = EnergyReading.objects.filter(
-            meter__building=building,
-            meter__meter_type='SOLAR'
-        )
-
-        from django.db.models import Sum, Max, Min
-        elec_agg = electricity_readings.aggregate(
-            total=Sum('energy_kwh'),
-            peak=Max('power_kw'),
-            earliest=Min('timestamp'),
-            latest=Max('timestamp')
-        )
-        solar_total = solar_readings.aggregate(total=Sum('energy_kwh'))['total'] or 0.0
-
-        total_kwh = elec_agg['total'] or 0.0
-        peak_kw = elec_agg['peak'] or 0.0
-        earliest = elec_agg['earliest']
-        latest = elec_agg['latest']
-
-        days = 1.0
-        if earliest and latest:
-            diff_days = (latest - earliest).total_seconds() / 86400.0
-            days = max(1.0, round(diff_days, 1))
-
-        avg_daily_kwh = total_kwh / days if total_kwh > 0 else building.baseline_kwh_per_day
-        solar_daily_kwh = solar_total / days if solar_total > 0 else 0.0
-
-        summary = {
-            'total_consumption_kwh': round(total_kwh, 2),
-            'average_daily_kwh': round(avg_daily_kwh, 2),
-            'peak_demand_kw': round(peak_kw, 2),
-            'total_solar_generated_kwh': round(solar_total, 2),
-        }
-
-        # 2. Run S2 7-day forecast
+        # S1 owns the measurement rules. Summary remains all-history;
+        # forecasting/assessment use complete days in the preceding 14 UTC days.
+        summary = summarize_building(building)
         forecaster = ConsumptionForecaster(horizon_days=7)
         forecast_list = forecaster.generate_forecast(building)
-
-        # 3. Compute Sustainability Score
+        daily_rows = forecaster.history['complete_days']
+        daily_average = forecaster.availability['observed_full_day_average_kwh']
+        matched_days = bool(daily_rows) and all(d['import_kwh'] is not None for d in daily_rows)
+        solar_daily = fsum(d['solar_kwh'] for d in daily_rows) / len(daily_rows) if matched_days else None
+        import_daily = fsum(d['import_kwh'] for d in daily_rows) / len(daily_rows) if matched_days else None
         sustainability_assessment = SustainabilityScorer.evaluate(
-            current_daily_kwh=avg_daily_kwh,
-            baseline_daily_kwh=building.baseline_kwh_per_day,
-            solar_daily_kwh=solar_daily_kwh
+            daily_average, building.baseline_kwh_per_day, solar_daily, import_daily_kwh=import_daily,
         )
+        if not summary['main_data_available'] or not forecast_list or not matched_days:
+            reason = (summary['main_data_reason'] if not summary['main_data_available'] else
+                      forecaster.availability['reason'] if not forecast_list else
+                      forecaster.history['summary']['grid_estimates_reason'])
+            return Response({
+                'building': {'id': building.id, 'name': building.name},
+                'availability': {'available': False, 'reason': reason},
+                'energy_summary': summary,
+                'sustainability_assessment': sustainability_assessment,
+                'forecast_preview': {'horizon_days': 7, 'projected_weekly_total_kwh':
+                                     round(sum(d['predicted_kwh'] for d in forecast_list), 2) if forecast_list else None},
+                'forecast_availability': forecaster.availability,
+                'recommendations': [],
+                'engine_telemetry': {'source': None, 'status': 'NOT_RUN', 'tokens_used': 0, 'latency_ms': 0},
+            }, status=status.HTTP_200_OK)
+        # Recommendations use observed full-day energy, never the partial-day mean.
+        coach_summary = dict(summary, average_daily_kwh=daily_average,
+                             total_solar_generated_kwh=solar_daily,
+                             solar_scope='mean of complete observed UTC days in forecast history')
 
         # 4. Generate AI Recommendations (OpenAI / Rule-Based)
         coach_result = SustainabilityCoachService.generate_recommendations(
             building=building,
-            summary=summary,
+            summary=coach_summary,
             forecast=forecast_list,
             target_savings_pct=target_savings_pct
         )
@@ -133,6 +119,9 @@ class GenerateRecommendationsAPIView(APIView):
                 'location': building.location,
                 'baseline_kwh_per_day': building.baseline_kwh_per_day
             },
+            'availability': {'available': True, 'reason': 'available'},
+            'energy_summary': summary,
+            'forecast_availability': forecaster.availability,
             'sustainability_assessment': sustainability_assessment,
             'forecast_preview': {
                 'horizon_days': 7,

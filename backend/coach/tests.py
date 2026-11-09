@@ -1,4 +1,6 @@
+from datetime import timedelta, timezone as datetime_timezone
 from django.test import TestCase
+from unittest.mock import patch
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -7,6 +9,7 @@ from monitoring.models import Building, Meter, EnergyReading
 from coach.models import AIRecommendation, LLMRequestLog
 
 
+@patch.dict('os.environ', {'OPENAI_API_KEY': ''})
 class CoachAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
@@ -14,20 +17,21 @@ class CoachAPITests(TestCase):
             name="Test Engineering Lab",
             location="Room E101",
             area_sqm=2000.0,
-            baseline_kwh_per_day=300.0
+            baseline_kwh_per_day=300.0, has_solar_installation=False
         )
         self.meter = Meter.objects.create(
             building=self.building,
             device_id="TEST-ENG-01",
             meter_type="ELECTRICITY"
         )
-        now = timezone.now()
-        EnergyReading.objects.create(
-            meter=self.meter,
-            timestamp=now,
-            energy_kwh=120.0,
-            power_kw=35.0
-        )
+        # Two complete, explicitly hourly UTC days; one point is insufficient.
+        start = (timezone.now().astimezone(datetime_timezone.utc)
+                 .replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2))
+        EnergyReading.objects.bulk_create([
+            EnergyReading(meter=self.meter, timestamp=start + timedelta(hours=i),
+                          energy_kwh=5, power_kw=35, interval_seconds=3600)
+            for i in range(48)
+        ])
 
     def test_forecast_endpoint(self):
         url = reverse('building-forecast', kwargs={'building_id': self.building.id})

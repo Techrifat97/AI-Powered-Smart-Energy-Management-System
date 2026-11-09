@@ -24,7 +24,7 @@
 The system is built as a unified Python architecture:
 * **Backend:** Django 5.2 + Django REST Framework (DRF), using **PostgreSQL for development, tests and deployment**.
 * **AI Engine (S2):** OpenAI `gpt-4o-mini` with automated token tracking, latency auditing, and a built-in deterministic **Rule-Based Fallback** engine.
-* **Frontend:** Streamlit interactive dashboard communicating with backend REST endpoints.
+* **Frontend:** Streamlit is a planned dashboard; the current frontend folder is a placeholder.
 * **Dependencies:** Unified single [`requirements.txt`](./requirements.txt) at the root level managing both Django and Streamlit packages.
 
 ```
@@ -37,11 +37,12 @@ CPC Project/
 │   ├── monitoring/                 # S1: Buildings, Smart Meters, Telemetry
 │   │   ├── models.py               # Building, Meter, EnergyReading
 │   │   ├── serializers.py
+│   │   ├── services/aggregation.py # Shared coverage, gross, solar & grid estimates
 │   │   ├── views.py                # Aggregation & summary APIs
 │   │   ├── urls.py
 │   │   ├── admin.py
 │   │   └── management/commands/
-│   │       └── seed_demo_data.py   # Realistic 14-day telemetry generator (812 readings)
+│   │       └── seed_demo_data.py   # 14-day hourly demo data (1,008 new readings)
 │   ├── coach/                      # S2: Syed's Forecasting & AI Coach
 │   │   ├── models.py               # ConsumptionForecast, AIRecommendation, LLMRequestLog
 │   │   ├── serializers.py
@@ -55,6 +56,7 @@ CPC Project/
 │   ├── analysis/                   # S3: Marwan's Cost, Scenarios & Alerts
 │   │   ├── models.py               # TariffPlan, EnergyAlert, CostReport
 │   │   ├── serializers.py
+│   │   ├── services/costs.py       # Explicit tariff estimates on S1 intervals
 │   │   ├── views.py                # Tariff management, alerts, cost analysis APIs
 │   │   ├── urls.py
 │   │   └── admin.py
@@ -156,7 +158,7 @@ populate it with 14 days of realistic energy readings:
 # 1. Apply schema migrations
 python backend/manage.py migrate
 
-# 2. Populate 14 days of realistic hourly telemetry (812 readings)
+# 2. Populate a NEW demo database with explicit hourly telemetry (1,008 readings)
 python backend/manage.py seed_demo_data
 
 # 3. (Optional) Create superuser to inspect data in Django Admin UI
@@ -192,123 +194,88 @@ The following three endpoints demonstrate end-to-end data transfer between **Sub
 ```
 
 ### Endpoint 1: S1 Monitoring Summary
-* **Route:** `GET /api/buildings/{id}/summary/`
-* **Subsystem:** Subsystem 1 (Monitoring)
-* **Purpose:** Aggregates meter readings for a building, computing total consumption, peak power demand, and solar PV generation.
-* **Sample Response:**
+
+`GET /api/buildings/{id}/summary/` summarizes all stored history, including
+inactive meters. Only `ELECTRICITY` contributes to gross consumption and sampled
+peak. HVAC and lighting are included submeters. Solar is separate generation.
+
+For matching intervals with main 100, HVAC 40, lighting 20 and solar 30 kWh,
+selected response fields are:
+
 ```json
 {
-  "building_id": 1,
-  "building_name": "Campus Science Complex - Block A",
-  "area_sqm": 3500.0,
-  "baseline_kwh_per_day": 320.0,
-  "total_consumption_kwh": 9252.94,
-  "average_daily_kwh": 660.92,
-  "peak_demand_kw": 36.0,
-  "total_solar_generated_kwh": 2142.28,
-  "net_grid_consumption_kwh": 7110.66,
-  "active_meters_count": 3,
-  "total_readings_count": 812
+  "total_consumption_kwh": 100.0,
+  "peak_demand_kw": 20.0,
+  "total_solar_generated_kwh": 30.0,
+  "net_grid_consumption_kwh": 70.0,
+  "estimated_grid_import_kwh": 70.0,
+  "estimated_grid_export_kwh": 0.0,
+  "main_data_available": true,
+  "main_data_ambiguous": false,
+  "grid_estimates_available": true
 }
 ```
 
----
+Here the main power sample is explicitly 20 kW. Recorded zero **energy** does not
+imply zero power or zero balance: main 0 kWh, power 7 kW and solar 10 kWh gives
+gross 0, peak 7, signed balance −10 and estimated export 10.
+
+The shared functions in `backend/monitoring/services/aggregation.py` require
+explicit interval durations for dependent results. Unknown/missing measurements
+remain `null`, with availability reasons. Known nonoverlapping main replacements
+are allowed; overlaps are flagged. Baseline is comparison information only.
+`average_daily_kwh` includes partial recorded UTC days; `full_day_average_kwh`
+uses only complete UTC days. Neither fills gaps with zeros.
+
+`net_grid_consumption_kwh` retains its legacy name but is a **signed recorded
+energy balance**, not imports. Separate import/export estimates require matching
+main/solar intervals and assume no battery. Missing solar is not zero unless
+`has_solar_installation=false` explicitly confirms absence for the reported history.
 
 ### Endpoint 2: S2 Energy Forecasting
-* **Route:** `GET /api/buildings/{id}/forecast/`
-* **Subsystem:** Subsystem 2 (Forecasting)
-* **Purpose:** Consumes S1 historical telemetry and generates a 7-day ahead forecast with weekday/weekend diurnal profiles, 95% confidence intervals, and trend detection.
-* **Sample Response:**
+
+`GET /api/buildings/{id}/forecast/` reuses S1 and requires at least two complete
+UTC days in the preceding 14 completed calendar days. It returns seven heuristic
+predictions starting tomorrow. Existing `confidence_*` fields are illustrative
+bands, not calibrated 95% intervals. Insufficient data produces `forecast=[]`,
+nullable prediction totals and `availability` explaining why; no baseline fallback.
+
+### Endpoint 3: S2 AI Coach
+
+`POST /api/recommendations/generate/` accepts:
+
 ```json
-{
-  "building_id": 1,
-  "horizon_days": 7,
-  "total_predicted_7d_kwh": 4605.82,
-  "avg_daily_predicted_kwh": 657.97,
-  "forecast": [
-    {
-      "forecast_date": "2026-11-06",
-      "day_name": "Friday",
-      "is_weekend": false,
-      "predicted_kwh": 715.93,
-      "confidence_lower_kwh": 658.66,
-      "confidence_upper_kwh": 773.20,
-      "trend": "INCREASING"
-    },
-    {
-      "forecast_date": "2026-11-07",
-      "day_name": "Saturday",
-      "is_weekend": true,
-      "predicted_kwh": 479.67,
-      "confidence_lower_kwh": 436.50,
-      "confidence_upper_kwh": 522.84,
-      "trend": "INCREASING"
-    }
-  ]
-}
+{"building_id": 1, "target_savings_pct": 15.0}
 ```
 
----
+The response includes the all-history `energy_summary`, recent complete-day
+`forecast_availability`, sustainability assessment and recommendations. Usable
+generation retains HTTP 201. Insufficient or ambiguous data returns HTTP 200,
+`availability.available=false`, empty recommendations and engine status `NOT_RUN`.
+Daily assessment uses observed complete days, not extrapolated partial days.
+Carbon uses matched-interval imports with an explicit scenario factor.
+`estimated_daily_cost_eur` and new recommendation `estimated_savings_eur` are
+`null`; S2 no longer applies a hardcoded electricity price. Weekly energy-saving
+goals remain illustrative scenarios. No key selects the rule-based provider.
 
-### Endpoint 3: S2 AI Coach Actionable Recommendations
-* **Route:** `POST /api/recommendations/generate/`
-* **Subsystem:** Subsystem 2 (AI Coach)
-* **Request Body:**
-```json
-{
-  "building_id": 1,
-  "target_savings_pct": 15.0
-}
-```
-* **Workflow:**
-  1. Retrieves S1 aggregated telemetry and S2 7-day forecasts.
-  2. Computes the **Sustainability Assessment** (Score 0–100, Efficiency Grade A+–F, Carbon Footprint in $\text{kg CO}_2\text{e}$, daily cost in €).
-  3. Prompts **OpenAI `gpt-4o-mini`** (or activates **Rule-Based Fallback** if no key is configured).
-  4. Persists recommendations to `AIRecommendation` table and audits execution in `LLMRequestLog`.
-* **Sample Response (HTTP 201 Created):**
-```json
-{
-  "building": {
-    "id": 1,
-    "name": "Campus Science Complex - Block A",
-    "baseline_kwh_per_day": 320.0
-  },
-  "sustainability_assessment": {
-    "sustainability_score": 78.4,
-    "efficiency_grade": "B",
-    "daily_carbon_kg_co2": 195.54,
-    "estimated_daily_cost_eur": 162.53,
-    "solar_offset_ratio": 0.23
-  },
-  "forecast_preview": {
-    "horizon_days": 7,
-    "projected_weekly_total_kwh": 4605.82
-  },
-  "recommendations": [
-    {
-      "id": 1,
-      "title": "Pre-Cooling & Peak Demand Shaving",
-      "category": "PEAK_SHAVING",
-      "priority": "HIGH",
-      "suggested_action": "Peak demand reached 36.0 kW. Pre-cool high-occupancy zones between 06:30 and 08:30 to avoid 11:00-14:00 high-tariff spikes.",
-      "estimated_savings_kwh": 270.0,
-      "estimated_savings_eur": 86.40,
-      "confidence_score": 0.92,
-      "source": "OPENAI"
-    }
-  ],
-  "engine_telemetry": {
-    "source": "OPENAI",
-    "status": "SUCCESS",
-    "tokens_used": {
-      "prompt_tokens": 412,
-      "completion_tokens": 195,
-      "total_tokens": 607
-    },
-    "latency_ms": 1150
-  }
-}
-```
+### Endpoint 4: S3 Cost Estimates
+
+`GET /api/buildings/{id}/cost/` uses the same all-history interval report and
+exactly one active global scenario tariff. Peak bands are UTC, including overnight
+bands. Import charges and export compensation are separate; missing/ambiguous
+pricing or unmatched measurements produce unavailable costs. An interval crossing
+unequal price bands requires finer measurements.
+
+Day export 10 kWh and night import 10 kWh retain both totals despite a zero signed
+balance. At €0.30/kWh import and €0.08/kWh feed-in, the recorded-interval estimate
+is €3.00 − €0.80 = €2.20. Gaps remain visible, and complete legacy cost totals stay
+`null` if span coverage is incomplete. `complete_bill_available` is always false:
+these estimates do not include contract history, fixed fees, taxes or a billing period.
+
+See [shared measurement policy, API fields, limitations and teammate setup](docs/energy-calculations.md)
+for the precise contract. New migrations preserve existing values and leave old
+durations/solar status unknown. New demo data is hourly with explicit night solar
+zeros; do not blindly label old rows or seed an existing database as a repair.
 
 ---
 

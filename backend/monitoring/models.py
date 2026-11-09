@@ -22,6 +22,10 @@ class Building(models.Model):
         validators=[validate_finite, MinValueValidator(0.0)],
         help_text="Target or historical baseline daily consumption in kWh"
     )
+    has_solar_installation = models.BooleanField(
+        null=True, blank=True, default=None,
+        help_text="True: installed; False: confirmed absent for the reported history; null: unknown",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -103,6 +107,10 @@ class EnergyReading(models.Model):
         validators=[validate_interval_timestamp],
         help_text="Interval start: timezone-aware UTC, aligned to a minute",
     )
+    interval_seconds = models.PositiveIntegerField(
+        null=True, blank=True, default=None, validators=[MinValueValidator(1)],
+        help_text="Duration from timestamp (inclusive); null means unknown, never inferred",
+    )
     energy_kwh = models.FloatField(
         validators=[validate_finite, MinValueValidator(0.0)],
         help_text="Energy consumed or generated in kWh during this interval, not cumulative",
@@ -124,6 +132,10 @@ class EnergyReading(models.Model):
             models.Index(fields=['meter', 'timestamp']),
         ]
         constraints = [
+            models.CheckConstraint(
+                condition=models.Q(interval_seconds__isnull=True) | models.Q(interval_seconds__gt=0),
+                name='s1_reading_duration_positive',
+            ),
             # The largest finite float also excludes PostgreSQL NaN and infinity.
             # Bound measurements by the largest representable finite float.
             models.CheckConstraint(
