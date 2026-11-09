@@ -32,7 +32,7 @@ class MonitoringAPITests(TestCase):
             meter=self.meter,
             timestamp=now,
             energy_kwh=45.5,
-            power_kw=12.2
+            power_kw=12.2, interval_seconds=60,
         )
 
     def test_building_summary_endpoint(self):
@@ -207,14 +207,16 @@ class MonitoringMigrationTests(TransactionTestCase):
         self.old_reading.objects.all().delete()
         self.old_apps.get_model('monitoring', 'Meter').objects.all().delete()
         self.old_apps.get_model('monitoring', 'Building').objects.all().delete()
-        MigrationExecutor(connection).migrate([self.migrate_to])
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
 
     def test_migration_preserves_hourly_demo_energy_and_inactive_history(self):
         reading = self.old_reading.objects.create(
             meter=self.old_meter, timestamp=self.timestamp, energy_kwh=6.0, power_kw=6.0
         )
         MigrationExecutor(connection).migrate([self.migrate_to])
-        current = EnergyReading.objects.get(pk=reading.pk)
+        state = MigrationExecutor(connection).loader.project_state([self.migrate_to])
+        current = state.apps.get_model('monitoring', 'EnergyReading').objects.get(pk=reading.pk)
         self.assertEqual(current.timestamp, self.timestamp)
         self.assertEqual(current.energy_kwh, 6.0)  # Still an hour's energy, not 0.1 kWh.
         self.assertEqual(current.power_kw, 6.0)
@@ -222,7 +224,14 @@ class MonitoringMigrationTests(TransactionTestCase):
         self.assertFalse(current.meter.is_active)
 
     def test_migration_preserves_all_seeded_demo_readings(self):
+        # Build a faithful pre-duration fixture with the current seeder, then
+        # downgrade only this disposable database. The original seeder omitted
+        # night-time solar zeros; retain the original 812-row regression case.
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
         call_command('seed_demo_data', stdout=StringIO())
+        EnergyReading.objects.filter(meter__meter_type='SOLAR', energy_kwh=0).delete()
+        MigrationExecutor(connection).migrate([self.migrate_from])
         self.old_apps.get_model('monitoring', 'Meter').objects.filter(
             device_id='MTR-HVAC-001'
         ).update(is_active=False)

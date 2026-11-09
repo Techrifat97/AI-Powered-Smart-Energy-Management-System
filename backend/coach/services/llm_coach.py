@@ -2,6 +2,7 @@ import os
 import json
 import time
 import logging
+from django.core.serializers.json import DjangoJSONEncoder
 from coach.models import AIRecommendation, LLMRequestLog
 
 logger = logging.getLogger(__name__)
@@ -15,33 +16,32 @@ class RuleBasedCoachProvider:
 
     @classmethod
     def generate(cls, building, summary: dict, forecast: list, target_savings_pct: float) -> list:
-        total_kwh = summary.get('total_consumption_kwh', 250.0)
-        peak_kw = summary.get('peak_demand_kw', 45.0)
-        solar_kwh = summary.get('total_solar_generated_kwh', 0.0)
-        daily_kwh = summary.get('average_daily_kwh', 250.0)
+        peak_kw = summary['peak_demand_kw']
+        solar_kwh = summary['total_solar_generated_kwh']
+        daily_kwh = summary['average_daily_kwh']
 
         recommendations = []
 
         # Rule 1: Peak shaving if peak demand is high relative to daily average
         if peak_kw > (daily_kwh / 10.0):
-            savings_kwh = round(peak_kw * 1.5 * 5, 2)  # 5 days
+            savings_kwh = 0.0  # A sampled peak alone cannot establish energy savings.
             recommendations.append({
                 'title': 'Pre-Cooling & Peak Demand Shaving',
                 'category': 'PEAK_SHAVING',
                 'priority': 'HIGH',
                 'suggested_action': (
                     f"Peak demand reached {peak_kw:.1f} kW. Pre-cool high-occupancy zones between 06:30 and 08:30 "
-                    f"to avoid the 11:00-14:00 high-tariff spike and reduce peak demand charges."
+                    f"and investigate load scheduling. This sample does not establish energy or tariff savings."
                 ),
                 'estimated_savings_kwh': savings_kwh,
-                'estimated_savings_eur': round(savings_kwh * 0.32, 2),
+                'estimated_savings_eur': None,
                 'confidence_score': 0.92,
                 'source': 'RULE_BASED'
             })
 
         # Rule 2: Solar utilization if solar exists
         if solar_kwh > 0:
-            savings_kwh = round(solar_kwh * 0.25, 2)
+            savings_kwh = 0.0  # Load shifting does not establish a reduction in gross energy.
             recommendations.append({
                 'title': 'Align Heavy Loads with Solar Peak',
                 'category': 'RENEWABLE_SHIFT',
@@ -51,7 +51,7 @@ class RuleBasedCoachProvider:
                     f"to 12:00-15:00 to maximize self-consumption and minimize grid draw."
                 ),
                 'estimated_savings_kwh': savings_kwh,
-                'estimated_savings_eur': round(savings_kwh * 0.32, 2),
+                'estimated_savings_eur': None,
                 'confidence_score': 0.88,
                 'source': 'RULE_BASED'
             })
@@ -67,7 +67,7 @@ class RuleBasedCoachProvider:
                     "Expected to eliminate phantom loads."
                 ),
                 'estimated_savings_kwh': savings_kwh,
-                'estimated_savings_eur': round(savings_kwh * 0.32, 2),
+                'estimated_savings_eur': None,
                 'confidence_score': 0.85,
                 'source': 'RULE_BASED'
             })
@@ -83,7 +83,7 @@ class RuleBasedCoachProvider:
                 f"by +1°C in cooling season and -1°C in heating season across administrative offices."
             ),
             'estimated_savings_kwh': target_kwh,
-            'estimated_savings_eur': round(target_kwh * 0.32, 2),
+            'estimated_savings_eur': None,
             'confidence_score': 0.81,
             'source': 'RULE_BASED'
         })
@@ -134,7 +134,7 @@ class SustainabilityCoachService:
                     "actionable recommendations formatted as a valid JSON array of objects with keys: "
                     "'title' (string), 'category' (one of: PEAK_SHAVING, HVAC_OPTIMIZATION, LIGHTING, RENEWABLE_SHIFT, BEHAVIORAL), "
                     "'priority' (HIGH, MEDIUM, or LOW), 'suggested_action' (string), "
-                    "'estimated_savings_kwh' (float), 'estimated_savings_eur' (float, assume €0.32/kWh), "
+                    "'estimated_savings_kwh' (float, illustrative weekly scenario), "
                     "'confidence_score' (float between 0.75 and 0.98). "
                     "Return ONLY the raw JSON array without markdown formatting or code fences."
                 )
@@ -143,7 +143,7 @@ class SustainabilityCoachService:
                     model=model_name,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": json.dumps(prompt_context)}
+                        {"role": "user", "content": json.dumps(prompt_context, cls=DjangoJSONEncoder)}
                     ],
                     temperature=0.3,
                     max_tokens=600,
@@ -205,7 +205,7 @@ class SustainabilityCoachService:
                 priority=r.get('priority', 'MEDIUM'),
                 suggested_action=r.get('suggested_action', ''),
                 estimated_savings_kwh=float(r.get('estimated_savings_kwh', 0.0)),
-                estimated_savings_eur=float(r.get('estimated_savings_eur', 0.0)),
+                estimated_savings_eur=None,  # No timed action or applicable tariff is established.
                 confidence_score=float(r.get('confidence_score', 0.85)),
                 source=r.get('source', source_used),
                 status='PENDING'
