@@ -181,9 +181,16 @@ hourly readings are not converted into 60-second measurements.
 For continuous **synthetic** telemetry, use `python backend/manage.py run_telemetry`
 or add `--once` for the latest completed UTC minute. This worker discovers current
 inventory each cycle and saves through validated ingestion. It never backfills
-downtime or creates assets. Use the separate simulation database setup in the
+downtime or creates assets. The simulator is our intended data source; manual
+demos use the configured development database (`smart_energy_db`). See the
 [generator guide](docs/simulated-telemetry.md); old unknown-duration data can block
 ingestion and is never silently repaired.
+
+S1 now supports building creation/updates, building-scoped meter setup, meter
+activation/deactivation and paginated read-only history. See the
+[dashboard API contract and manual verification steps](docs/s1-management-api.md).
+Management permissions currently use `AllowAny`; these endpoints are for the
+local development environment and are not ready for public internet deployment.
 
 ---
 

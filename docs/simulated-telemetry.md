@@ -1,10 +1,10 @@
 # S1 simulated telemetry
 
-These readings are **synthetic**, not physical measurements or a calibrated
-building/weather model. The command labels every cycle `SYNTHETIC`. The database
-currently has no per-reading source flag, so use a separate simulation database
-when demonstrating it; stored synthetic and physical data are not distinguishable
-by a source field.
+The simulator is the project's intended primary data source; no physical IoT
+integration is planned. Its values are synthetic, not a calibrated building or
+weather model, and command output is labelled `SYNTHETIC`. Manual development and
+demos use the configured PostgreSQL database, normally `smart_energy_db`.
+Automated tests alone use a separate disposable PostgreSQL test database.
 
 ## One building-minute
 
@@ -133,77 +133,43 @@ the command with an error rather than causing a rapid retry loop; `--traceback`
 retains diagnostic details. Ctrl+C stops cleanly; if it interrupts a write, the
 current building transaction rolls back while earlier completed buildings remain.
 
-## Manual demonstration later (not the application database)
+## Manual development/demo checks
 
-These instructions create disposable simulation data. They were not run against
-the application's database during implementation.
+Use the existing ignored `.env` for `smart_energy_db`; no separate simulation
+database, `createdb`, or new `DB_NAME` override is required. Use a fresh terminal
+if an old guide left a database override in the shell. These instructions are for
+later manual use; implementation verification does not write application data.
 
-1. Activate the environment: `source .venv/bin/activate` (macOS/Linux). Keep normal
-   local PostgreSQL credentials in your ignored `.env`. Create a separate empty
-   database owned by that configured local role, replacing `YOUR_POSTGRES_ROLE`:
-
-   ```sh
-   createdb -h 127.0.0.1 -p 5432 -U YOUR_POSTGRES_ROLE smart_energy_simulation
-   export DB_NAME=smart_energy_simulation
-   export OPENAI_API_KEY=''
-   python backend/manage.py migrate
-   ```
-
-   `DB_NAME` overrides `.env` in this shell. These migrations target the new
-   simulation database only. Do not run the hourly demo seeder for this setup.
-
-2. Create the explicit synthetic inventory:
-
-   ```sh
-   python backend/manage.py shell <<'PY'
-   from django.conf import settings
-   from django.db import transaction
-   from monitoring.models import Building, Meter
-   assert settings.DATABASES['default']['NAME'] == 'smart_energy_simulation'
-   with transaction.atomic():
-       b = Building.objects.create(name='Synthetic demo', has_solar_installation=True)
-       for kind in ['ELECTRICITY', 'HVAC', 'LIGHTING', 'SOLAR']:
-           Meter.objects.create(building=b, device_id=f'SIM-{b.pk}-{kind}', meter_type=kind)
-   print('Created one synthetic building with four meters.')
-   PY
-   ```
-
-3. Wait until **two UTC minute boundaries after creation** so all meters existed
-   at the start of the latest completed minute. For example, meters created at
-   12:00:30 first qualify for `[12:01,12:02)`, processed at/after 12:02. Then run:
+1. Activate the environment (`source .venv/bin/activate` on macOS/Linux), then
+   start `python backend/manage.py runserver`. No new migrations are needed for
+   the management APIs. Follow the [management API guide](s1-management-api.md#manual-api-verification-later)
+   to create a fresh building, explicit solar status, main/HVAC/solar meters and
+   save their returned IDs. The API enforces supported inventory and allows
+   step-by-step setup. Do not use hourly seeding to repair unknown legacy data.
+2. Wait two UTC minute boundaries after the last meter creation. For example,
+   meters created at 12:00:30 first qualify for `[12:01,12:02)`, processed at/after
+   12:02. From the activated project environment run:
 
    ```sh
    python backend/manage.py run_telemetry --once
    python backend/manage.py run_telemetry --once
    ```
 
-   Within the same UTC wall-clock minute, expect `created=4` then
-   `already_existing=4`, with no duplicate rows. Crossing another boundary creates
-   the next interval instead. Running too early reports a creation-time skip.
+   Within the same UTC wall-clock minute, the fresh three-meter example reports
+   `created=3` then `already_existing=3`. A new boundary processes a new interval.
+   Too-new required meters produce a creation-time skip. The command processes
+   all buildings, so other old inventories may report independent skips/failures.
+3. Inspect `/api/buildings/{id}/readings/` and `/api/buildings/{id}/summary/`.
+   Deactivate HVAC with `PATCH /api/meters/{meter_id}/` and
+   `{"is_active":false}`. Existing history remains available; later cycles omit
+   it. Reactivate with `true` and later cycles include it again. After changing
+   eligible inventory, wait for a **new** completed minute instead of retrying
+   the previously written set. See the API guide for exact curl commands.
+4. For continuous operation run `python backend/manage.py run_telemetry`; Ctrl+C
+   stops it. Building/solar metadata is not rewritten by generation. Activation
+   timestamps, backfill, batteries and realistic weather are not implemented.
 
-4. Inspect only that simulation database:
-
-   ```sh
-   python backend/manage.py shell <<'PY'
-   from django.conf import settings
-   from django.db.models import Max
-   from monitoring.models import EnergyReading
-   assert settings.DATABASES['default']['NAME'] == 'smart_energy_simulation'
-   latest = EnergyReading.objects.aggregate(start=Max('timestamp'))['start']
-   rows = list(EnergyReading.objects.filter(timestamp=latest).select_related('meter'))
-   assert len(rows) == 4
-   for r in rows:
-       assert r.interval_seconds == 60
-       assert r.energy_kwh == r.power_kw / 60
-       print(r.meter.meter_type, r.timestamp, r.interval_seconds, r.energy_kwh, r.power_kw)
-   PY
-   ```
-
-5. For continuous operation run `python backend/manage.py run_telemetry`; stop
-   with Ctrl+C. `unset DB_NAME OPENAI_API_KEY` restores normal `.env` selection
-   for subsequent commands in that shell. No source flag, batteries, weather
-   realism, activation history, backfill or process supervisor is implemented.
-
-Tests run with controlled clocks and separate disposable PostgreSQL data. The next
-small task is explicit meter-management workflows so users can configure supported
-inventory and verified solar status without relying on shell setup.
+Tests use controlled clocks and a separate disposable PostgreSQL database; they
+must never use `smart_energy_db` as their test database. The next task is Docker
+Compose with a separate telemetry worker process. Existing legacy-duration or
+inventory problems must still be reviewed explicitly before expecting generation.
