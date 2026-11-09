@@ -112,14 +112,14 @@ Failures leave no new reading from the failed call and do not update existing
 readings. If the caller wraps multiple operations in an outer transaction,
 successful ingestion is not committed until that outer transaction commits.
 
-## Future generator and verification
+## Generator and verification
 
-The future worker will discover active meters each cycle, choose an explicit UTC
-minute-boundary start, generate measurements, and call this function once per
-meter with duration `60`. It can count `created=False` as a successful retry and
-handle `ValidationError` as rejected input/coverage. Do not generate an arbitrary
-timestamp and expect ingestion to round it or wait for another meter's data.
-Worker scheduling, batching and APIs are not implemented here.
+The [synthetic worker](simulated-telemetry.md) discovers inventory every cycle and
+calls this function with duration `60` for each planned building member. It counts
+`created=False` as an exact retry and rolls back a building's new set on validation
+failure. The worker schedules completed UTC minutes; ingestion never rounds
+timestamps or waits for other meters. Ingestion itself still saves only one row;
+worker scheduling and building transactions live in the generator/command.
 
 Run checks using the configured separate disposable PostgreSQL test database:
 

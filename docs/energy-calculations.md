@@ -178,8 +178,8 @@ solar generation is never all credited at the import price.
    `python backend/manage.py seed_demo_data`. New data has 14 full UTC days,
    3600-second intervals, explicit solar zeros and 1,008 readings. The command
    skips populated demos; it does not repair old metadata or overwrite old values.
-   New telemetry, when implemented later, must explicitly supply 60-second duration
-   and call validation before saving. Do not run demo seeding as a data repair.
+   The [synthetic worker](simulated-telemetry.md) explicitly supplies 60-second
+   duration through validated ingestion. Do not run demo seeding as a data repair.
 6. Confirm `DB_TEST_NAME` names an unused disposable PostgreSQL database,
    starts with `test_` and differs from the application database. The local test
    role needs `CREATEDB`. Leave `OPENAI_API_KEY` empty in the test process. Run:
@@ -200,7 +200,8 @@ complete days for forecasting and assessment. S3 uses its matched import/export
 intervals for tariff estimates. Neither consumer adds submeters to the main load
 or invents missing measurements.
 
-The next small task is a reviewed legacy-data provenance audit and explicit
-metadata entry, followed by validated 60-second ingestion. Telemetry workers,
-dashboard changes, batteries, true grid-flow meters, independent parallel meter
-networks and historical tariff/installation policies remain outside this change.
+Legacy-data provenance and explicit metadata entry remain necessary for old rows.
+Validated ingestion and a [synthetic minute worker](simulated-telemetry.md) are now
+available. Dashboard changes, batteries, true grid-flow meters, independent
+parallel meter networks and historical tariff/installation policies remain outside
+these calculations.

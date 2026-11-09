@@ -38,11 +38,14 @@ CPC Project/
 │   │   ├── models.py               # Building, Meter, EnergyReading
 │   │   ├── serializers.py
 │   │   ├── services/aggregation.py # Shared coverage, gross, solar & grid estimates
+│   │   ├── services/ingestion.py   # Validated single-reading insertion
+│   │   ├── services/generator.py   # Deterministic synthetic building-minutes
 │   │   ├── views.py                # Aggregation & summary APIs
 │   │   ├── urls.py
 │   │   ├── admin.py
 │   │   └── management/commands/
-│   │       └── seed_demo_data.py   # 14-day hourly demo data (1,008 new readings)
+│   │       ├── seed_demo_data.py   # 14-day hourly demo data (1,008 new readings)
+│   │       └── run_telemetry.py    # Synthetic completed-minute worker
 │   ├── coach/                      # S2: Syed's Forecasting & AI Coach
 │   │   ├── models.py               # ConsumptionForecast, AIRecommendation, LLMRequestLog
 │   │   ├── serializers.py
@@ -174,6 +177,13 @@ invalid numeric values, unsupported meter types/units, or duplicate
 `(meter, timestamp)` readings. It does not delete or repair data automatically.
 Valid hourly demo values and readings on deactivated meters are preserved;
 hourly readings are not converted into 60-second measurements.
+
+For continuous **synthetic** telemetry, use `python backend/manage.py run_telemetry`
+or add `--once` for the latest completed UTC minute. This worker discovers current
+inventory each cycle and saves through validated ingestion. It never backfills
+downtime or creates assets. Use the separate simulation database setup in the
+[generator guide](docs/simulated-telemetry.md); old unknown-duration data can block
+ingestion and is never silently repaired.
 
 ---
 
