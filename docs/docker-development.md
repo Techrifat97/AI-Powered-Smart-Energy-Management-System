@@ -1,10 +1,10 @@
 # Docker: local development and university demonstrations
 
-This is a local-only stack for the simulator-backed project. No Streamlit service
-is started because the frontend application does not exist yet. Gunicorn serves
-the Django JSON APIs; it handles worker processes and graceful termination without
-using Django's development HTTP server. Existing Postgres.app development still
-works independently.
+This local-only stack runs the simulator-backed project. Examples use Bash/zsh
+on macOS/Linux from the repository root. Gunicorn serves the Django JSON APIs
+with worker management and graceful termination. No frontend service is started
+because the frontend directory is a placeholder. [Host development](host-development.md)
+uses an independent PostgreSQL configuration.
 
 ## First setup
 
@@ -69,8 +69,8 @@ reaps children. PostgreSQL has its normal image-managed database process user.
 
 Application services have no automatic restart loop: startup/worker errors remain
 visible in status and logs. Correct the error, then use `dc up -d`. Database
-readiness is checked before migration execution. A healthcheck failure or a
-migration error prevents dependent startup. The backend healthcheck reads the
+readiness is checked before migration execution. A database readiness failure or unsuccessful migration prevents dependent
+startup. The backend healthcheck reads the
 building API and therefore checks both HTTP and database connectivity.
 
 Inspect without dumping secrets:
@@ -159,27 +159,14 @@ interval. No duplicate keys are created. Do not retry an old completed set after
 changing its eligible inventory. The controlled-clock test suite checks exact
 retry behavior without depending on manual timing.
 
-## Automated tests and checks
+## Tests and checks
 
-Use only the configured disposable `test_smart_energy_docker`, never the running
-application database. Django's settings reject a test name that equals the app
-name or lacks `test_`. Do not point this value at data you need to retain.
-
-```sh
-dc stop telemetry
-dc exec backend python backend/manage.py check --database default
-dc exec backend python backend/manage.py makemigrations --check --dry-run
-dc exec backend python backend/manage.py test config monitoring coach analysis --noinput
-git diff --check
-# After reviewing the results:
-dc up -d telemetry
-```
-
-The Docker development role can create/drop that disposable test database. No
-test command migrates the running app database. AI is disabled in the Compose
-environment; mocked AI tests never contact the external service. `--noinput`
-assumes the configured test database is disposable. Ordinary Django cleanup drops
-it after the suite.
+The [testing guide](testing.md) is the reference for Docker image tests,
+read-only working-tree tests and optional host tests. It defines disposable
+PostgreSQL database requirements and how external AI calls are disabled. Test
+execution does not require stopping the application worker because its database
+is separate. Code changes are not visible in an already-built image unless the
+working-tree mount described in that guide is used.
 
 ## Stop, recreate and return to host development
 
@@ -191,15 +178,15 @@ dc up -d            # Recreate using the SAME persistent volume.
 ```
 
 Do **not** add `--volumes`/`-v` to routine shutdown: that option deletes database
-storage. No pruning or volume deletion is part of this workflow. Persistence was
-verified by container recreation with unchanged application fingerprints.
+storage. The named volume is retained across ordinary container recreation. Back up data
+before planned storage or database-version changes.
 
 To use Postgres.app again, run `dc down`, activate `.venv`, and use the unchanged
 local `.env` with normal `python backend/manage.py ...` commands. There are no
 Docker database exports to unset in this workflow. Docker data stays in its own
 volume and is available on the next `dc up -d`.
 
-## Limits for handover
+## Operational limitations
 
 Management permissions remain `AllowAny`, CORS remains permissive, and there is
 no HTTPS or per-user access control. Localhost publishing does not make this a

@@ -111,10 +111,10 @@ cycle, commits wait for that outer transaction.
 
 ## Command and scheduling
 
-```sh
-python backend/manage.py run_telemetry --once
-python backend/manage.py run_telemetry
-```
+The `run_telemetry` management command supports continuous operation and `--once`.
+See [Docker operations](docker-development.md#explicit-demo-inventory) or
+[host processes](host-development.md#schema-and-processes) for environment-specific
+commands.
 
 `--once` processes only the latest completed minute, reports results and exits.
 Repeated calls within the same wall-clock minute retry the same interval. Expected
@@ -130,46 +130,24 @@ within that running process. Correct UTC system time is assumed.
 Expected configuration/validation problems are reported per building and revisited
 on a later scheduled cycle. Unexpected errors propagate. PostgreSQL errors stop
 the command with an error rather than causing a rapid retry loop; `--traceback`
-retains diagnostic details. Ctrl+C stops cleanly; if it interrupts a write, the
+retains diagnostic details. Ctrl+C and container SIGTERM stop cleanly; if they interrupt a write, the
 current building transaction rolls back while earlier completed buildings remain.
 
-## Manual development/demo checks
+## Operation
 
-Use the existing ignored `.env` for `smart_energy_db`; no separate simulation
-database, `createdb`, or new `DB_NAME` override is required. Use a fresh terminal
-if an old guide left a database override in the shell. These instructions are for
-later manual use; implementation verification does not write application data.
+The configured development database holds simulator data; a separate simulation
+database is not required. Docker has its own PostgreSQL server/volume, independent
+of host PostgreSQL. Follow the [Docker guide](docker-development.md) for private
+configuration, startup, explicit four-meter demo initialization and logs, or
+[host development](host-development.md) for the optional direct setup.
 
-1. Activate the environment (`source .venv/bin/activate` on macOS/Linux), then
-   start `python backend/manage.py runserver`. No new migrations are needed for
-   the management APIs. Follow the [management API guide](s1-management-api.md#manual-api-verification-later)
-   to create a fresh building, explicit solar status, main/HVAC/solar meters and
-   save their returned IDs. The API enforces supported inventory and allows
-   step-by-step setup. Do not use hourly seeding to repair unknown legacy data.
-2. Wait two UTC minute boundaries after the last meter creation. For example,
-   meters created at 12:00:30 first qualify for `[12:01,12:02)`, processed at/after
-   12:02. From the activated project environment run:
+Meter eligibility is based on interval start: a meter created at 12:00:30 UTC
+first qualifies for `[12:01,12:02)`, processed at 12:02. Waiting two minute boundaries
+after setup ensures this interval is complete. Inventory changes apply to new
+cycles; retrying a previously written minute with changed eligible membership is
+a conflict. The [S1 API guide](s1-management-api.md#manual-api-checks) demonstrates
+meter deactivation/reactivation and historical retention.
 
-   ```sh
-   python backend/manage.py run_telemetry --once
-   python backend/manage.py run_telemetry --once
-   ```
-
-   Within the same UTC wall-clock minute, the fresh three-meter example reports
-   `created=3` then `already_existing=3`. A new boundary processes a new interval.
-   Too-new required meters produce a creation-time skip. The command processes
-   all buildings, so other old inventories may report independent skips/failures.
-3. Inspect `/api/buildings/{id}/readings/` and `/api/buildings/{id}/summary/`.
-   Deactivate HVAC with `PATCH /api/meters/{meter_id}/` and
-   `{"is_active":false}`. Existing history remains available; later cycles omit
-   it. Reactivate with `true` and later cycles include it again. After changing
-   eligible inventory, wait for a **new** completed minute instead of retrying
-   the previously written set. See the API guide for exact curl commands.
-4. For continuous operation run `python backend/manage.py run_telemetry`; Ctrl+C
-   stops it. Building/solar metadata is not rewritten by generation. Activation
-   timestamps, backfill, batteries and realistic weather are not implemented.
-
-Tests use controlled clocks and a separate disposable PostgreSQL database; they
-must never use `smart_energy_db` as their test database. The next task is Docker
-Compose with a separate telemetry worker process. Existing legacy-duration or
-inventory problems must still be reviewed explicitly before expecting generation.
+Unknown-duration history can block ingestion. No command automatically repairs
+legacy data, invents missing intervals or backfills downtime. Automated checks use
+controlled clocks and a [separate disposable test database](testing.md).

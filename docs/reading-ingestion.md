@@ -7,6 +7,9 @@ must use a separately reviewed process.
 
 ## Calling the function
 
+The example assumes a configured Django context and an existing `meter_id`.
+Executing it writes to that context's selected application database.
+
 ```python
 from datetime import datetime, timezone
 
@@ -106,13 +109,13 @@ This guarantee assumes the project's normal PostgreSQL READ COMMITTED isolation.
 Writers that bypass this service can still insert different-key overlaps, invalid
 timestamps or readings on inactive meters: those rules are not database
 constraints. The lock does not turn the service into a universal database gate.
-All future telemetry writers should therefore use this function.
+Telemetry writers use this service to obtain its validation and coverage guarantees.
 
 Failures leave no new reading from the failed call and do not update existing
 readings. If the caller wraps multiple operations in an outer transaction,
 successful ingestion is not committed until that outer transaction commits.
 
-## Generator and verification
+## Generator integration
 
 The [synthetic worker](simulated-telemetry.md) discovers inventory every cycle and
 calls this function with duration `60` for each planned building member. It counts
@@ -121,16 +124,6 @@ failure. The worker schedules completed UTC minutes; ingestion never rounds
 timestamps or waits for other meters. Ingestion itself still saves only one row;
 worker scheduling and building transactions live in the generator/command.
 
-Run checks using the configured separate disposable PostgreSQL test database:
-
-```sh
-python backend/manage.py check --database default
-python backend/manage.py makemigrations --check --dry-run
-python backend/manage.py test config monitoring coach analysis --noinput
-git diff --check
-```
-
-`test_ingestion.py` includes ordinary validation/coverage tests and PostgreSQL
-`TransactionTestCase` tests using separate connections for concurrent duplicate
-submissions and deterministic database uniqueness races. Existing tests are
-unchanged. No model or migration change is needed for ingestion.
+Validation, coverage and PostgreSQL race tests are described in the
+[testing guide](testing.md). `test_ingestion.py` includes separate-connection
+transaction tests for duplicate submissions and database uniqueness races.

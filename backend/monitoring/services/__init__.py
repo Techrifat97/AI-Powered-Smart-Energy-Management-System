@@ -1,1 +1,1 @@
-"""Shared S1 calculations."""
+"""S1 inventory, ingestion, telemetry and shared energy calculations."""

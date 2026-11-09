@@ -8,7 +8,7 @@ from coach.models import ConsumptionForecast
 
 
 class ConsumptionForecaster:
-    """Small heuristic forecast; needs two complete UTC days in the past 14 days.
+    """Daily heuristic requiring two complete UTC days in the preceding 14-day window.
 
     Partial days and missing days are not extrapolated. Bands are illustrative,
     not statistically calibrated confidence intervals. Baseline is reference only.

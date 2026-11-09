@@ -21,9 +21,8 @@ from coach.services.llm_coach import SustainabilityCoachService
 
 class BuildingForecastAPIView(APIView):
     """
-    Endpoint 2: Subsystem 2 (Forecasting & Prediction).
-    Consumes S1 historical telemetry data and generates a 7-day ahead
-    heuristic consumption forecast with illustrative bands and baseline comparison.
+    Calculate and store seven daily heuristic forecasts using shared S1 data.
+    Bands are illustrative; availability depends on complete UTC-day coverage.
     """
 
     def get(self, request, building_id):
@@ -50,13 +49,10 @@ class BuildingForecastAPIView(APIView):
 
 class GenerateRecommendationsAPIView(APIView):
     """
-    Endpoint 3: Subsystem 2 (AI Sustainability Coach).
-    Orchestrates the entire intelligence pipeline:
-    1. Extracts S1 aggregated telemetry summary for the building.
-    2. Runs S2 ConsumptionForecaster to project next week's energy pattern.
-    3. Evaluates sustainability score, carbon footprint, and energy grade.
-    4. Invokes OpenAI (gpt-4o-mini using OPENAI_API_KEY from .env) or Rule-Based Fallback.
-    5. Persists recommendations with illustrative kWh scenarios; monetary savings are unavailable.
+    Generate recommendations from shared S1 summaries and complete-day history.
+    Sufficient observations enable the configured OpenAI or rule-based provider;
+    otherwise the response reports unavailable inputs. Energy goals are
+    illustrative scenarios and monetary recommendation savings are unavailable.
     """
 
     def post(self, request):
@@ -101,7 +97,7 @@ class GenerateRecommendationsAPIView(APIView):
                              total_solar_generated_kwh=solar_daily,
                              solar_scope='mean of complete observed UTC days in forecast history')
 
-        # 4. Generate AI Recommendations (OpenAI / Rule-Based)
+        # Invoke a provider only after measurement-availability checks pass.
         coach_result = SustainabilityCoachService.generate_recommendations(
             building=building,
             summary=coach_summary,
@@ -109,7 +105,6 @@ class GenerateRecommendationsAPIView(APIView):
             target_savings_pct=target_savings_pct
         )
 
-        # 5. Serialize saved recommendation objects
         rec_serializer = AIRecommendationSerializer(coach_result['recommendations'], many=True)
 
         return Response({
@@ -153,7 +148,7 @@ class RecommendationListView(ListAPIView):
 
 class RecommendationFeedbackCreateView(CreateAPIView):
     """
-    Submit user feedback on a recommendation (thumbs up / rating / accept).
+    Store submitted feedback; recommendation comes from the request serializer.
     """
     queryset = RecommendationFeedback.objects.all()
     serializer_class = RecommendationFeedbackSerializer

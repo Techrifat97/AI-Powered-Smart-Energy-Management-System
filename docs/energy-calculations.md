@@ -5,8 +5,8 @@
 - `energy_kwh` is interval energy. `power_kw` is an independent sampled power
   value, not an interval average. Zero energy can coexist with nonzero power.
 - `timestamp` is the interval start. Nullable `interval_seconds` explicitly defines
-  its duration: `[timestamp, timestamp + interval_seconds)`. New telemetry will
-  supply `60`; the new demo generator supplies `3600`. No duration is inferred
+  its duration: `[timestamp, timestamp + interval_seconds)`. The minute simulator
+  stores `60`; the hourly fixture generator stores `3600`. No duration is inferred
   from timestamp gaps, energy/power ratios or meter type.
 - `ELECTRICITY` is gross whole-building load. HVAC and lighting are included in
   that load. Solar is separate generation. Deactivated meters retain their data
@@ -101,15 +101,15 @@ The score is an illustrative baseline comparison and is unavailable with no
 positive baseline or missing daily measurements. Carbon is an explicit scenario
 using average matched-interval imports and `0.385 kg/kWh`; it does not net solar
 across an entire day. Solar offset ratio is unavailable when gross is zero.
-`estimated_daily_cost_eur` is now `null`; pricing belongs to S3.
+`estimated_daily_cost_eur` is `null`; pricing belongs to S3.
 
-New recommendation `estimated_savings_eur` is `null`, including when an AI model
+Generated recommendation `estimated_savings_eur` is `null`, including when an AI model
 supplies a monetary guess. No hardcoded €0.32 conversion remains in S2. Rule-based
 weekly energy goals are illustrative scenarios, not measured savings. A power
 sample or shifting a solar load alone does not establish reduced gross kWh, so
 those rules leave their legacy kWh-saving field at zero. Existing stored forecasts
-and recommendations are preserved; old monetary guesses are not re-priced by
-these migrations. Audit them before treating them as tariff-based estimates.
+and recommendations retain their stored values. Historical monetary guesses are
+not automatically repriced and must not be treated as tariff-based estimates.
 
 ## S3 tariff estimates
 
@@ -148,60 +148,43 @@ solar generation is never all credited at the import price.
 
 ## Small numerical checks
 
-| Measurements | Previous problem | Shared result |
+| Measurements | Interpretation to avoid | Shared result |
 | --- | --- | --- |
-| Same interval: main 100, HVAC 40, lighting 20, solar 30 kWh | Gross could become 160, or net 70 mislabeled as gross. | Gross 100, solar 30, signed balance 70; matched-interval import estimate 70. |
-| Main 0 kWh with power sample 7 kW, solar 10 kWh | Baseline fallback or all fields forced to zero. | Gross 0, peak 7, balance −10, import 0, export 10. |
-| Day main 0 / solar 10, night main 10 / solar 0 | Period balance zero hid both flows and charges. | Import 10 and export 10. At €0.30 import / €0.08 feed-in: €3 charge − €0.80 credit = €2.20 estimate. Gaps prevent a complete-period claim. |
-| No main data, baseline 250 | Baseline presented as measured consumption. | Gross, peak, averages and balance unavailable; baseline stays reference only. |
+| Same interval: main 100, HVAC 40, lighting 20, solar 30 kWh | Adding included submeters gives 160, or balance 70 is mislabeled as gross. | Gross 100, solar 30, signed balance 70; matched-interval import estimate 70. |
+| Main 0 kWh with power sample 7 kW, solar 10 kWh | Replacing zero with baseline, or forcing power/balance to zero. | Gross 0, peak 7, balance −10, import 0, export 10. |
+| Day main 0 / solar 10, night main 10 / solar 0 | Using the zero period balance as zero imports and charges. | Import 10 and export 10. At €0.30 import / €0.08 feed-in: €3 charge − €0.80 credit = €2.20 estimate. Gaps prevent a complete-period claim. |
+| No main data, baseline 250 | Presenting baseline as measured consumption. | Gross, peak, averages and balance unavailable; baseline stays reference only. |
 
-## Migrations and teammate setup after pulling
+## Legacy data and hourly fixtures
 
-1. Preserve local work before pulling the reviewed changes. Activate the virtual
-   environment and run `python -m pip install -r requirements.txt`. Configure local
-   PostgreSQL `.env` credentials without committing them. Dependencies are unchanged.
-2. Back up and inspect the local application database before applying migrations.
-   Run `python backend/manage.py showmigrations` and
-   `python backend/manage.py migrate --plan`, then
-   `python backend/manage.py migrate` when ready. These commands are teammate
-   setup instructions; this integration task did **not** migrate the application DB.
-3. New `monitoring.0003` adds nullable solar status and nullable positive duration.
-   Existing readings, values, timestamps and inactive-meter history are preserved.
-   Existing durations and solar status remain `null`: do not blanket-label legacy
-   rows. Establish provenance for each known dataset before explicitly recording
-   its duration. Missing old solar observations cannot be backfilled as zeros
-   without evidence. Leave uncertain data unknown and expect unavailable results.
-4. `coach.0002` permits unavailable monetary recommendation savings;
-   `coach.0003` corrects forecast-band help text. Old migrations are unchanged.
-   Existing stored recommendation/forecast values remain preserved.
-5. For a **new disposable demo database**, after migrating, optionally run
-   `python backend/manage.py seed_demo_data`. New data has 14 full UTC days,
-   3600-second intervals, explicit solar zeros and 1,008 readings. The command
-   skips populated demos; it does not repair old metadata or overwrite old values.
-   The [synthetic worker](simulated-telemetry.md) explicitly supplies 60-second
-   duration through validated ingestion. Do not run demo seeding as a data repair.
-6. Confirm `DB_TEST_NAME` names an unused disposable PostgreSQL database,
-   starts with `test_` and differs from the application database. The local test
-   role needs `CREATEDB`. Leave `OPENAI_API_KEY` empty in the test process. Run:
+The numeric/uniqueness migration checks legacy values before adding database
+constraints and refuses incompatible data rather than deleting or repairing it.
+The interval-metadata migration adds nullable `interval_seconds` and solar status;
+it does not guess values for old rows. Existing timestamps, energy values and
+inactive-meter history are preserved. The coach migrations permit unavailable
+monetary savings and describe forecast bands as illustrative; they do not reprice
+stored recommendations.
 
-   ```sh
-   python backend/manage.py check --database default
-   python backend/manage.py makemigrations --check --dry-run
-   python backend/manage.py test config monitoring coach analysis --noinput
-   git diff --check
-   ```
+Unknown legacy durations require dataset provenance before explicit metadata
+entry. Gaps, energy/power ratios and meter type do not establish duration. Missing
+old solar observations cannot be inserted as zeros without evidence. Uncertain
+data remains unknown and can make dependent results unavailable.
 
-7. API clients should display unavailable values using the availability/reason
-   fields before arithmetic. Confirm solar status for the reporting history and
-   configure one applicable global scenario tariff before demonstrating costs.
+`seed_demo_data` is an optional historical fixture command. For a fresh compatible
+fixture it creates 14 full UTC days, 3600-second intervals, recorded night solar
+zeros and 1,008 readings across three meters. It uses fixed building/device names
+and a main-reading-count threshold to skip populated fixtures; this is not a
+validation or repair of existing datasets. Partial/incompatible fixtures require
+review. It writes hourly data separately from the minute-ingestion service and is
+not called at startup. Routine demonstrations use explicit inventory plus the
+[minute simulator](simulated-telemetry.md).
 
-S1 loads stored readings and resolves their coverage once. S2 uses that report's
-complete days for forecasting and assessment. S3 uses its matched import/export
-intervals for tariff estimates. Neither consumer adds submeters to the main load
-or invents missing measurements.
+Schema setup is documented separately for [Docker](docker-development.md#services-and-startup)
+and [host development](host-development.md#schema-and-processes). Automated checks
+use the [isolated testing workflow](testing.md), not an application database.
 
-Legacy-data provenance and explicit metadata entry remain necessary for old rows.
-Validated ingestion and a [synthetic minute worker](simulated-telemetry.md) are now
-available. Dashboard changes, batteries, true grid-flow meters, independent
-parallel meter networks and historical tariff/installation policies remain outside
-these calculations.
+S1 centralizes coverage and measurement rules. S2 uses the all-history summary
+and complete days from its forecast window; S3 uses matched grid intervals. These
+are direct Python calls, not HTTP requests between subsystems. Dashboard work,
+batteries, independent parallel meter coverage and historical tariff/installation
+policies are not implemented by these calculations.

@@ -1,3 +1,3 @@
-from django.contrib import admin
+"""Account application scaffold; no custom admin registrations."""
 
-# Register your models here.
+from django.contrib import admin

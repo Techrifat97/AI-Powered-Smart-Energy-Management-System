@@ -11,7 +11,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("Seeding sample data for Smart Energy Management System...")
 
-        # 1. Create or get primary demo building
         building, created = Building.objects.get_or_create(
             name="Campus Science Complex - Block A",
             defaults={
@@ -26,7 +25,6 @@ class Command(BaseCommand):
         else:
             self.stdout.write(f"Using existing building: {building.name} (ID: {building.id})")
 
-        # 2. Create smart meters
         elec_meter, _ = Meter.objects.get_or_create(
             building=building,
             device_id="MTR-ELEC-001",
@@ -43,7 +41,6 @@ class Command(BaseCommand):
             defaults={'meter_type': 'SOLAR', 'unit': 'kWh', 'is_active': True}
         )
 
-        # 3. Generate 14 days of hourly readings if not already populated
         existing_count = EnergyReading.objects.filter(meter=elec_meter).count()
         if existing_count > 50:
             self.stdout.write(self.style.WARNING(f"Readings already exist ({existing_count} records). Skipping generation."))
@@ -68,7 +65,7 @@ class Command(BaseCommand):
                 hour_factor = math.sin((hour - 6) / 18.0 * math.pi) if 6 <= hour <= 22 else 0.0
                 hour_factor = max(0.0, hour_factor)
 
-                # Weekday vs Weekend multiplier
+                # Reduced weekend activity
                 activity_mult = 0.45 if is_weekend else 1.0
 
                 # Gross main electricity, including HVAC, lighting and equipment
@@ -101,7 +98,7 @@ class Command(BaseCommand):
                     )
                 )
 
-                # Solar PV generation (bell curve between 08:00 and 18:00)
+                # Hourly solar profile between 07:00 and 18:00 UTC
                 solar_factor = math.sin((hour - 7) / 11.0 * math.pi) if 7 <= hour <= 18 else 0.0
                 solar_factor = max(0.0, solar_factor)
                 solar_power_kw = round(22.0 * solar_factor, 2)

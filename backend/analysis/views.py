@@ -20,7 +20,7 @@ class TariffPlanListCreateView(ListCreateAPIView):
 
 class EnergyAlertListView(ListAPIView):
     """
-    List anomaly and threshold alerts, optionally filtered by building.
+    List stored alerts, optionally filtered by building; no detection runs here.
     """
     serializer_class = EnergyAlertSerializer
 
@@ -34,7 +34,7 @@ class EnergyAlertListView(ListAPIView):
 
 class EnergyAlertDetailView(RetrieveUpdateAPIView):
     """
-    Retrieve and acknowledge/resolve an energy alert.
+    Retrieve or update stored alert fields.
     """
     queryset = EnergyAlert.objects.all()
     serializer_class = EnergyAlertSerializer
@@ -42,7 +42,7 @@ class EnergyAlertDetailView(RetrieveUpdateAPIView):
 
 class BuildingCostAnalysisAPIView(APIView):
     """
-    Subsystem 3 (Analysis): Compute electricity cost breakdown for a building.
+    Return tariff scenario estimates from shared S1 intervals; not a utility bill.
     """
 
     def get(self, request, building_id):

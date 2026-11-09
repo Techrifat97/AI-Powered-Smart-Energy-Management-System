@@ -18,7 +18,7 @@ from .serializers import (
 
 class BuildingListView(ListCreateAPIView):
     """
-    List all monitored buildings.
+    List or create buildings with validated inventory metadata.
     """
     queryset = Building.objects.all().prefetch_related('meters')
     serializer_class = BuildingSerializer
@@ -26,7 +26,7 @@ class BuildingListView(ListCreateAPIView):
 
 class BuildingDetailView(RetrieveUpdateAPIView):
     """
-    Retrieve details for a single building including its installed meters.
+    Retrieve or update building details, including nested meter information.
     """
     queryset = Building.objects.all().prefetch_related('meters')
     serializer_class = BuildingSerializer
@@ -80,8 +80,8 @@ class BuildingSummaryAPIView(APIView):
     """
     Summarize all stored history, including readings from inactive meters.
     Missing or ambiguous main data is flagged; it is not replaced by a baseline.
-    The shared function also supports time windows for future Python consumers;
-    this endpoint retains its existing all-history scope and URL.
+    The Python service supports optional time windows; the HTTP endpoint
+    summarizes all stored history.
     """
 
     def get(self, request, building_id):

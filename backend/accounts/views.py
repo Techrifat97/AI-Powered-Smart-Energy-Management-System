@@ -1,3 +1,3 @@
-from django.shortcuts import render
+"""Account application scaffold; no custom authentication views."""
 
-# Create your views here.
+from django.shortcuts import render

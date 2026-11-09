@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 
 class RuleBasedCoachProvider:
     """
-    Deterministic rule-based provider.
-    Guarantees reliable, instant recommendations when OpenAI is offline, unconfigured, or out of quota.
+    Deterministic recommendation scenarios for validated observation summaries.
+    Used when the external provider is unconfigured or produces no usable result.
     """
 
     @classmethod
@@ -22,7 +22,7 @@ class RuleBasedCoachProvider:
 
         recommendations = []
 
-        # Rule 1: Peak shaving if peak demand is high relative to daily average
+        # Peak-load investigation heuristic, not a measured savings calculation.
         if peak_kw > (daily_kwh / 10.0):
             savings_kwh = 0.0  # A sampled peak alone cannot establish energy savings.
             recommendations.append({
@@ -39,7 +39,7 @@ class RuleBasedCoachProvider:
                 'source': 'RULE_BASED'
             })
 
-        # Rule 2: Solar utilization if solar exists
+        # Solar-load scheduling scenario for positive recorded generation.
         if solar_kwh > 0:
             savings_kwh = 0.0  # Load shifting does not establish a reduction in gross energy.
             recommendations.append({
@@ -56,7 +56,7 @@ class RuleBasedCoachProvider:
                 'source': 'RULE_BASED'
             })
         else:
-            # Rule 2b: Lighting and standby audit
+            # Lighting and standby scenario.
             savings_kwh = round(daily_kwh * 0.08 * 7, 2)
             recommendations.append({
                 'title': 'Nighttime Standby & Lighting Setback',
@@ -72,7 +72,7 @@ class RuleBasedCoachProvider:
                 'source': 'RULE_BASED'
             })
 
-        # Rule 3: Behavioral target
+        # Illustrative weekly reduction target.
         target_kwh = round(daily_kwh * (target_savings_pct / 100.0) * 7, 2)
         recommendations.append({
             'title': f'{int(target_savings_pct)}% Target Savings Behavioral Nudge',
@@ -93,8 +93,8 @@ class RuleBasedCoachProvider:
 
 class SustainabilityCoachService:
     """
-    Main orchestration service for AI recommendations.
-    Connects to OpenAI API using OPENAI_API_KEY from environment, with automatic fallback.
+    Optional OpenAI generation with rule-based fallback and request logging.
+    Model and API key are read from the process environment.
     """
 
     @classmethod

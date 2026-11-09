@@ -8,7 +8,7 @@ from .validators import validate_finite, validate_interval_timestamp, validate_p
 
 class Building(models.Model):
     """
-    Subsystem 1 (Monitoring): Core physical entity tracked by the energy management system.
+    Subsystem 1: Building metadata and reference daily consumption.
     """
     name = models.CharField(max_length=120)
     location = models.CharField(max_length=200, blank=True, default='')
@@ -53,7 +53,7 @@ class Meter(models.Model):
     """
     Smart meter mapped to a building. ELECTRICITY measures gross building load;
     HVAC and LIGHTING are included submeters, and SOLAR measures generation.
-    is_active is the switch for future telemetry; deactivation retains history.
+    is_active controls telemetry eligibility; deactivation retains history.
     """
     METER_TYPES = [
         ('ELECTRICITY', 'Electricity Main'),
@@ -90,13 +90,13 @@ class EnergyReading(models.Model):
     """
     Energy measured during an interval, not a cumulative lifetime counter.
 
-    New telemetry will use 60-second intervals starting on UTC minute boundaries.
+    Simulated telemetry uses 60-second intervals starting on UTC minute boundaries.
     Existing hourly demo readings keep their original energy and timestamps.
     A power sample need not equal average interval power, so no energy/power
     equality is imposed. Solar direction is represented by meter_type; stored
     energy and power are nonnegative magnitudes.
 
-    Call full_clean() before saving new input. As with normal Django models,
+    New input requires full_clean() validation. As with normal Django models,
     save()/bulk_create() do not call field validators automatically. Numeric,
     meter-type/unit and uniqueness constraints also protect direct database writes;
     timestamp alignment is model validation, not a database constraint.
@@ -136,8 +136,7 @@ class EnergyReading(models.Model):
                 condition=models.Q(interval_seconds__isnull=True) | models.Q(interval_seconds__gt=0),
                 name='s1_reading_duration_positive',
             ),
-            # The largest finite float also excludes PostgreSQL NaN and infinity.
-            # Bound measurements by the largest representable finite float.
+            # The largest finite float excludes PostgreSQL NaN and infinities.
             models.CheckConstraint(
                 condition=models.Q(energy_kwh__gte=0.0, energy_kwh__lte=float_info.max),
                 name='s1_reading_energy_valid',

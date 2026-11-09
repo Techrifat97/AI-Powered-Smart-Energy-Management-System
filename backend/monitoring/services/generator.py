@@ -56,7 +56,7 @@ def _plan(building, meters, minute):
 
 def _building_minute(building_id, minute):
     with transaction.atomic():
-        # Building first, then ALL current meters by ascending PK. The building
+        # Building first, then all current meters by ascending PK. The building
         # UPDATE lock also blocks normal FK-checked meter creation until commit.
         building = Building.objects.select_for_update().get(pk=building_id)
         meters = list(Meter.objects.select_for_update(no_key=True).filter(
@@ -86,8 +86,8 @@ def _building_minute(building_id, minute):
         eligible = [m for m in active if m.created_at <= minute]
         plan = _plan(building, eligible, minute)
 
-        # Without an inventory manifest we cannot prove how a partial old set
-        # was planned. Reject it, and any different membership, without filling it.
+        # Without a historical inventory manifest, partial/different meter sets
+        # cannot be safely completed and are rejected without modification.
         existing_ids = set(EnergyReading.objects.filter(
             meter__building=building, timestamp=minute).values_list('meter_id', flat=True))
         if existing_ids and existing_ids != {m.pk for m in eligible}:
@@ -102,7 +102,7 @@ def _building_minute(building_id, minute):
 
 
 def generate_minute(minute, *, now=None):
-    """Process one completed UTC minute against the CURRENT database inventory.
+    """Process one completed UTC minute against the current database inventory.
 
     Return {minute, created, already_existing, skipped, failed, buildings}.
     Created/existing count readings; skipped/failed count buildings. Building

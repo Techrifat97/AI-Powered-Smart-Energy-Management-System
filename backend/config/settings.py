@@ -3,10 +3,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
-# Build paths inside the project: BASE_DIR is the 'backend' folder
+# Settings paths are relative to the backend directory.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load environment variables from .env files
+# Process variables take precedence over optional host .env files.
 load_dotenv(BASE_DIR.parent / '.env')
 load_dotenv(BASE_DIR / '.env')
 

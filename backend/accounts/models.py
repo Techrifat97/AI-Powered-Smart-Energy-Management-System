@@ -1,3 +1,3 @@
-from django.db import models
+"""Account application scaffold; no custom account models."""
 
-# Create your models here.
+from django.db import models

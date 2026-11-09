@@ -3,7 +3,7 @@
 The simulator is the project's intended data source. These APIs configure its
 inventory and expose stored readings to the dashboard. Manual development/demo
 work uses the configured `smart_energy_db`; automated tests use a **separate
-disposable PostgreSQL database**. No model/migration change is required here.
+disposable PostgreSQL database**.
 
 ## Routes for the dashboard
 
@@ -16,11 +16,10 @@ Both `/api/` and `/api/monitoring/` prefixes work. Examples use `/api/`.
 | `/api/buildings/{id}/meters/` | GET, POST | Paginated list of that building's meters; create an assigned meter. |
 | `/api/meters/{id}/` | GET, PATCH | Retrieve meter; PATCH only `is_active`. |
 | `/api/buildings/{id}/readings/` | GET | Paginated read-only history, optionally filtered by meter and time. |
-| `/api/buildings/{id}/summary/` | GET | Existing all-history summary; calculations and response semantics unchanged. |
+| `/api/buildings/{id}/summary/` | GET | All-history summary; see the shared measurement policy. |
 
 HEAD/OPTIONS are also available where supported. There are no hard-delete or
-reading-write endpoints. Meter PUT and DELETE return 405. Existing building
-response fields remain; nested meter objects gain the additive `building` ID.
+reading-write endpoints. Meter PUT and DELETE return 405. Building responses include nested meter objects with their `building` ID.
 
 ### Create/update examples
 
@@ -150,29 +149,29 @@ Validation errors use HTTP 400 and field names, for example:
 ```
 
 Exact wording can come from Django/DRF validators. Unknown resources return 404;
-unsupported methods return 405. Existing global permissions are **AllowAny**:
+unsupported methods return 405. Global permissions are **AllowAny**:
 these management endpoints require no login, and there is no per-user building
 ownership. CORS currently allows all origins. These development endpoints are
 **not suitable for public internet deployment** without access-control work.
-Authentication redesign is outside this change.
+Custom authentication and per-user permissions are not implemented.
 
-## Manual API verification later
+## Manual API checks
 
-These steps intentionally write demo data to the configured development database
-(`smart_energy_db`), not the disposable automated-test database. They were not
-executed against application data during implementation. No `.env` edit or
-separate simulation database is needed.
+These Bash/zsh examples create/update data through the selected application API;
+they are not automated tests. Start the server with [Docker](docker-development.md)
+or the optional [host setup](host-development.md). The examples use the default
+localhost port and Python 3 in the client shell for extracting returned IDs. Host
+and Docker servers have independent application databases; no extra simulation
+database is required.
 
-1. Activate `.venv`, confirm your normal local database configuration, and start
-   `python backend/manage.py runserver`. Use a second terminal for the commands
-   below. Create a fresh building so old unknown-duration history cannot block it:
+1. Create a fresh building so old unknown-duration history cannot block it:
 
    ```sh
    API=http://127.0.0.1:8000/api
    s1_building_json=$(curl -fsS -X POST "$API/buildings/" -H 'Content-Type: application/json' \
      -d '{"name":"API demo","location":"Lab","area_sqm":1000,"baseline_kwh_per_day":200,"has_solar_installation":true}')
    printf '%s\n' "$s1_building_json"
-   BUILDING_ID=$(printf '%s' "$s1_building_json" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+   BUILDING_ID=$(printf '%s' "$s1_building_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
    ```
 
 2. Create main/HVAC/solar explicitly; save the HVAC ID for deactivation:
@@ -182,15 +181,15 @@ separate simulation database is needed.
      -d "{\"device_id\":\"API-$BUILDING_ID-MAIN\",\"meter_type\":\"ELECTRICITY\"}"
    s1_meter_json=$(curl -fsS -X POST "$API/buildings/$BUILDING_ID/meters/" -H 'Content-Type: application/json' \
      -d "{\"device_id\":\"API-$BUILDING_ID-HVAC\",\"meter_type\":\"HVAC\"}")
-   METER_ID=$(printf '%s' "$s1_meter_json" | python -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+   METER_ID=$(printf '%s' "$s1_meter_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
    curl -fsS -X POST "$API/buildings/$BUILDING_ID/meters/" -H 'Content-Type: application/json' \
      -d "{\"device_id\":\"API-$BUILDING_ID-PV\",\"meter_type\":\"SOLAR\"}"
    curl -fsS "$API/buildings/$BUILDING_ID/"
    ```
 
-3. Wait two UTC minute boundaries after the last meter creation, then run
-   `python backend/manage.py run_telemetry --once` from the activated project
-   environment. The worker processes every configured building and reports skips
+3. Wait two UTC minute boundaries after the last meter creation, then let the running worker process it, or invoke `run_telemetry --once`
+   using the [Docker command](docker-development.md#explicit-demo-inventory) or
+   [host command](host-development.md#schema-and-processes). The worker processes every configured building and reports skips
    or failures for other existing inventories; this new building should generate
    three rows. Inspect it:
 
@@ -213,11 +212,6 @@ separate simulation database is needed.
    request history with `start=bad` or another building's `meter_id`. Expect field
    errors/404, and verify the original objects/readings remain unchanged.
 
-Automated verification is `python backend/manage.py test config monitoring coach
-analysis --noinput` using the configured **separate disposable PostgreSQL test DB**,
-plus Django checks, migration consistency and `git diff --check`.
-
-S1 is ready for Docker integration once these changes are reviewed and the target
-inventory/legacy metadata are checked. Activation timestamps, historical metadata
-repair, process supervision and access-control hardening remain separate work;
-Docker Compose will provide process setup, not fix those data policies.
+Automated tests and database isolation are documented in [testing](testing.md).
+Activation timestamps and a reviewed historical metadata-repair workflow are not
+implemented. Docker manages processes; it does not change these data policies.

@@ -67,7 +67,7 @@ class EnergyAlert(models.Model):
 
 class CostReport(models.Model):
     """
-    Subsystem 3 (Analysis / Marwan): Monthly aggregated financial expenditure breakdown.
+    Subsystem 3 (Analysis / Marwan): Stored cost-report data; no generation workflow.
     """
     building = models.ForeignKey(
         'monitoring.Building',
