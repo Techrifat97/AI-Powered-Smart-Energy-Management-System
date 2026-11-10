@@ -5,7 +5,10 @@ from .views import (
     EnergyAlertListView,
     EnergyAlertDetectView,
     EnergyAlertDetailView,
-    BuildingCostAnalysisAPIView
+    BuildingCostAnalysisAPIView,
+    BuildingScenarioAPIView,
+    BuildingCostReportView,
+    CostReportListView,
 )
 
 urlpatterns = [
@@ -15,5 +18,8 @@ urlpatterns = [
     path('alerts/detect/', EnergyAlertDetectView.as_view(), name='alert-detect'),
     path('alerts/<int:pk>/', EnergyAlertDetailView.as_view(), name='alert-detail'),
     path('buildings/<int:building_id>/cost/', BuildingCostAnalysisAPIView.as_view(), name='building-cost-analysis'),
+    path('buildings/<int:building_id>/scenarios/', BuildingScenarioAPIView.as_view(), name='building-scenario'),
+    path('buildings/<int:building_id>/reports/', BuildingCostReportView.as_view(), name='building-cost-reports'),
+    path('reports/', CostReportListView.as_view(), name='cost-report-list'),
 ]
 

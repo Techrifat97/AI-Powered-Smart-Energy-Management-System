@@ -3,7 +3,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 from monitoring.models import Building, Meter, EnergyReading
-from analysis.models import TariffPlan, EnergyAlert
+from analysis.models import TariffPlan, EnergyAlert, CostReport
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
 from analysis.services.alerts import detect_alerts
@@ -156,3 +156,92 @@ class AlertDetectionTests(TestCase):
         self.assertEqual(listing.data['count'], 1)
         listing = self.client.get(reverse('alert-list'), {'is_resolved': 'false'})
         self.assertEqual(listing.data['count'], 0)
+
+
+class ReportAndScenarioTests(TestCase):
+    """One fully covered UTC day: 14.4 kWh consumed, 5.76 kWh solar, 8.64 kWh imported."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.building = Building.objects.create(name='Report lab', baseline_kwh_per_day=100.0)
+        main = Meter.objects.create(building=self.building, device_id='REP-MAIN', meter_type='ELECTRICITY')
+        solar = Meter.objects.create(building=self.building, device_id='REP-SOLAR', meter_type='SOLAR')
+        self.day = datetime(2026, 1, 5, tzinfo=dt_timezone.utc)
+        EnergyReading.objects.bulk_create(
+            [EnergyReading(meter=main, timestamp=self.day + timedelta(minutes=i),
+                           interval_seconds=60, energy_kwh=0.01, power_kw=0.6) for i in range(1440)] +
+            [EnergyReading(meter=solar, timestamp=self.day + timedelta(minutes=i),
+                           interval_seconds=60, energy_kwh=0.004, power_kw=0.24) for i in range(1440)])
+
+    def activate_tariff(self, rate=0.30):
+        return TariffPlan.objects.create(
+            name='Flat', rate_standard_eur_per_kwh=rate, rate_peak_eur_per_kwh=rate,
+            peak_start_hour=11, peak_end_hour=16, solar_feed_in_eur_per_kwh=0.10, is_active=True)
+
+    def post_report(self, start='2026-01-05', end='2026-01-05'):
+        return self.client.post(reverse('building-cost-reports', args=[self.building.id]),
+                                {'period_start': start, 'period_end': end}, format='json')
+
+    def test_report_is_generated_and_listed(self):
+        tariff = self.activate_tariff()
+        response = self.post_report()
+        self.assertEqual(response.status_code, 201)
+        self.assertAlmostEqual(response.data['total_grid_kwh'], 8.64, places=6)
+        self.assertAlmostEqual(response.data['total_cost_eur'], 2.59, places=2)
+        self.assertAlmostEqual(response.data['solar_savings_eur'], 1.73, places=2)
+        self.assertEqual(CostReport.objects.get().tariff, tariff)
+        listing = self.client.get(reverse('building-cost-reports', args=[self.building.id]))
+        self.assertEqual(len(listing.data), 1)
+        listing = self.client.get(reverse('cost-report-list'), {'building_id': self.building.id})
+        self.assertEqual(listing.data['count'], 1)
+
+    def test_report_is_refused_without_tariff_or_full_coverage(self):
+        response = self.post_report()
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.data['reason'], 'missing_active_tariff')
+        self.activate_tariff()
+        response = self.post_report(end='2026-01-06')
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.data['reason'], 'period_not_fully_covered')
+        response = self.post_report(start='2026-01-06', end='2026-01-05')
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(CostReport.objects.count(), 0)
+
+    def test_report_rejects_bad_dates(self):
+        self.activate_tariff()
+        self.assertEqual(self.post_report(start='not-a-date').status_code, 400)
+
+    def scenario(self, **body):
+        return self.client.post(reverse('building-scenario', args=[self.building.id]), body, format='json')
+
+    def test_scenario_requires_active_tariff(self):
+        response = self.scenario(consumption_change_pct=-10)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.data['available'])
+        self.assertEqual(response.data['reason'], 'missing_active_tariff')
+
+    def test_scenario_without_changes_equals_baseline(self):
+        self.activate_tariff()
+        data = self.scenario().data
+        self.assertTrue(data['available'])
+        self.assertAlmostEqual(data['baseline']['net_cost_eur'], 2.59, places=2)
+        self.assertEqual(data['difference_net_cost_eur'], 0.0)
+
+    def test_scenario_consumption_reduction_lowers_cost(self):
+        self.activate_tariff()
+        data = self.scenario(consumption_change_pct=-50).data
+        self.assertAlmostEqual(data['scenario']['import_kwh'], 1.44, places=6)
+        self.assertAlmostEqual(data['difference_net_cost_eur'], -2.16, places=2)
+
+    def test_scenario_alternative_tariff_is_not_stored(self):
+        self.activate_tariff()
+        data = self.scenario(tariff={'rate_standard_eur_per_kwh': 0.5, 'rate_peak_eur_per_kwh': 0.5}).data
+        self.assertAlmostEqual(data['scenario']['net_cost_eur'], 4.32, places=2)
+        self.assertAlmostEqual(data['difference_net_cost_eur'], 1.73, places=2)
+        self.assertEqual(TariffPlan.objects.count(), 1)
+
+    def test_scenario_validation(self):
+        self.activate_tariff()
+        self.assertEqual(self.scenario(consumption_change_pct=-150).status_code, 400)
+        self.assertEqual(self.scenario(tariff={'rate_standard_eur_per_kwh': -1,
+                                               'rate_peak_eur_per_kwh': 1}).status_code, 400)
