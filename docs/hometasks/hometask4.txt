@@ -1,0 +1,20 @@
+
+Hometask4. Exception Handling and Unit tests
+Arbeitsanweisung
+
+The aim of this work is to learn how to handle error in your application and  testing princples in Django/Flask.
+
+Please learn the principles of error handling https://docs.python.org/3/tutorial/errors.html
+
+Create an error-handling class for each subsystem.
+
+Please learn the principles of automated testing in Django https://docs.djangoproject.com/en/6.1/topics/testing/ or Flask https://flask.palletsprojects.com/en/stable/testing/
+
+Create 15 different tests for your application.
+
+Upload the link to your github.
+
+Create 15 different tests for your application.
+
+Upload the link to your github.
+

@@ -1,0 +1,9 @@
+
+Hometask3. Web APIs & Database Access Layers
+Arbeitsanweisung
+
+The aim of this work is to learn how to create a simple Django or Flask project and use it with MySql for data output.
+
+To create your first application please follow Django documentation or Flask documentation https://flask.palletsprojects.com/en/stable/quickstart/
+
+Create your project at the github and apply the link your project. Add your indentification and update the readme file with the project information.

@@ -1,0 +1,55 @@
+The aim of this work is to learn to work with  streaming architectures and real-time data pipelines, processing events on the fly requires clean object-oriented abstractions. In this homeworkassignment, you will design and implement an event-driven stream processing framework using key Object-Oriented Programming (OOP) concepts in Python.
+
+Your implementation must explicitly demonstrate the following concepts:
+
+    Abstract Base Classes (ABCs): Defining interface contracts with @abstractmethod.
+
+    Inheritance & Polymorphism: Creating specialized stream processors that adhere to a uniform API.
+
+    Operator Overloading: Overloading __add__ (or __or__) to compose processing pipelines intuitively.
+
+    Iterators & Generators: Implementing __iter__ and __next__ for stream consumption.
+
+AI-Powered Smart Energy Management System
+
+    Context: Ingests high-frequency readings from IoT smart meters (HVAC, solar inverters, battery storage) across smart buildings.
+
+    Pipeline Goal:
+
+        Filter out inactive or sub-threshold meters based on power usage metrics.
+
+        Transform valid energy metrics into updated load balances, carbon equivalents, or peak-tariff flags.
+
+AI-Powered Waste Sorting & Recycling Assistant
+
+    Context: Processes real-time image recognition payloads from automated conveyor belt optical sorters.
+
+    Pipeline Goal:
+
+        Filter out low-confidence material classification predictions.
+
+        Transform bounding box metrics and visual tags into material categories (e.g., PET, HDPE, Aluminum) and conveyor routing codes.
+
+Enterprise Carbon Footprint Tracker & AI Assistant
+
+    Context: Ingests live operational telemetry (flight bookings, data center server utility logs, freight logistics payloads).
+
+    Pipeline Goal:
+
+        Filter operational activity records according to scope tags (Scope 1, Scope 2, Scope 3).
+
+        Transform activity metrics into metric tons of $CO_2e$ emissions using domain-specific emission factors.
+
+AI-Powered Circular Economy Product Passport
+
+    Context: Ingests life-cycle events across a product's supply chain (raw material extraction, refurbishment, component repair, disassembly).
+
+    Pipeline Goal:
+
+        Filter out out-of-sequence or unverified lifecycle event records.
+
+        Transform verified event records into dynamic Recyclability Indices and remaining functional lifecycle percentages.
+
+Upload the the solution in new branch HomeworkAssignment2.
+
+readme file should contain the class diagrams and the link to the 5 min video

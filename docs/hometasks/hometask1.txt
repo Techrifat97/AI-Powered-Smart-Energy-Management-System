@@ -1,0 +1,41 @@
+
+Hometask 1. Object Oriented Concepts
+Arbeitsanweisung
+
+The primary goal of this assignment is to translate the high-level architecture designed in your Capstone Project UML diagrams into concrete Object-Oriented Programming (OOP) class implementations.
+
+Requirements & Technical Specifications. Code Implementation
+
+    Per Team Member Requirement: Every student in the team must implement at least 3 unique classes corresponding to their assigned subsystem.
+
+    Class Requirements: Each class must include:
+
+        Constructor (__init__): Proper state initialization.
+
+        Initialization Methods: Setup or configuration logic where applicable.
+
+        Encapsulation (Getters & Setters): Accessor and mutator methods for class attributes.
+
+Version Control (GitHub)
+
+    Create and push all solution code to a dedicated Git branch named Homeassignment1.
+
+    The core branch or project repository must contain a clean, structured directory layout.
+
+ Repository Documentation (README.md)
+
+Your repository's README.md must include the following sections:
+
+    Team Overview: List of all team members and their respective assigned subsystems.
+
+    System Design: Rendered UML diagrams corresponding to the subsystems being implemented.
+
+    Presentation Link: Embedded link to your team's video presentation.
+
+ Team Video Presentation
+
+    Record a single, unified team presentation (3 to 5 minutes in duration).
+
+    Every team member must explain their implemented classes and demonstrate how they align with the subsystem architecture.
+
+    Upload the video (e.g., via YouTube, Loom, or Google Drive) and place the direct link inside the README.md.
