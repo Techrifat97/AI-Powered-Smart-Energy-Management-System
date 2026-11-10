@@ -5,6 +5,7 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 from monitoring.models import Building
+from .services.alerts import detect_alerts
 from .services.costs import cost_analysis
 from .models import TariffPlan, EnergyAlert, CostReport
 from .serializers import TariffPlanSerializer, EnergyAlertSerializer, CostReportSerializer
@@ -37,7 +38,32 @@ class EnergyAlertListView(ListAPIView):
         building_id = self.request.query_params.get('building_id')
         if building_id:
             queryset = queryset.filter(building_id=building_id)
+        for param, field in [('is_resolved', 'is_resolved'), ('severity', 'severity'),
+                             ('alert_type', 'alert_type')]:
+            value = self.request.query_params.get(param)
+            if value is not None:
+                if param == 'is_resolved':
+                    value = value.lower() in ('1', 'true', 'yes')
+                queryset = queryset.filter(**{field: value})
         return queryset
+
+
+class EnergyAlertDetectView(APIView):
+    """
+    Run rule-based detection for a building and store newly found alerts.
+    """
+
+    def post(self, request):
+        try:
+            building_id = int(request.data.get('building_id'))
+        except (TypeError, ValueError):
+            return Response({'building_id': 'A valid building id is required.'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        building = get_object_or_404(Building, id=building_id)
+        created = detect_alerts(building)
+        return Response({'building_id': building.pk, 'created_count': len(created),
+                         'alerts': EnergyAlertSerializer(created, many=True).data},
+                        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
 
 
 class EnergyAlertDetailView(RetrieveUpdateAPIView):

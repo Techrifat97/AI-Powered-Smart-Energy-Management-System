@@ -51,6 +51,8 @@ class EnergyAlertSerializer(serializers.ModelSerializer):
             'severity_display', 'alert_type', 'alert_type_display',
             'message', 'value_recorded', 'threshold_value', 'is_resolved', 'created_at'
         ]
+        # Alerts are produced by detection; clients may only resolve/reopen them.
+        read_only_fields = [f for f in fields if f != 'is_resolved']
 
 
 class CostReportSerializer(serializers.ModelSerializer):
