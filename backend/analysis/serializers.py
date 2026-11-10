@@ -18,7 +18,7 @@ class TariffPlanSerializer(serializers.ModelSerializer):
         def value(name):
             if name in attrs:
                 return attrs[name]
-            return getattr(self.instance, name) if self.instance else self.fields[name].default
+            return getattr(self.instance, name) if self.instance else TariffPlan._meta.get_field(name).default
 
         for name in ('rate_standard_eur_per_kwh', 'rate_peak_eur_per_kwh', 'solar_feed_in_eur_per_kwh'):
             rate = value(name)
