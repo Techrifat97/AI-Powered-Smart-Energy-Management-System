@@ -20,3 +20,6 @@ build/
 
 # IDE
 .idea/
+
+# Personal study notes (not committed)
+learning-notes/
