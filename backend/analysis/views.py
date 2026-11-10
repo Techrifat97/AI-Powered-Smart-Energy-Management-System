@@ -18,6 +18,14 @@ class TariffPlanListCreateView(ListCreateAPIView):
     serializer_class = TariffPlanSerializer
 
 
+class TariffPlanDetailView(RetrieveUpdateAPIView):
+    """
+    Retrieve or update one tariff, e.g. to deactivate it before activating another.
+    """
+    queryset = TariffPlan.objects.all()
+    serializer_class = TariffPlanSerializer
+
+
 class EnergyAlertListView(ListAPIView):
     """
     List stored alerts, optionally filtered by building; no detection runs here.

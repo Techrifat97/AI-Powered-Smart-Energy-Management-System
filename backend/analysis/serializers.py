@@ -1,3 +1,5 @@
+from math import isfinite
+
 from rest_framework import serializers
 from .models import TariffPlan, EnergyAlert, CostReport
 
@@ -10,6 +12,31 @@ class TariffPlanSerializer(serializers.ModelSerializer):
             'peak_start_hour', 'peak_end_hour', 'solar_feed_in_eur_per_kwh',
             'is_active', 'created_at'
         ]
+        read_only_fields = ['id', 'created_at']
+
+    def validate(self, attrs):
+        def value(name):
+            if name in attrs:
+                return attrs[name]
+            return getattr(self.instance, name) if self.instance else self.fields[name].default
+
+        for name in ('rate_standard_eur_per_kwh', 'rate_peak_eur_per_kwh', 'solar_feed_in_eur_per_kwh'):
+            rate = value(name)
+            if not isfinite(rate) or rate < 0:
+                raise serializers.ValidationError({name: 'Must be a finite, non-negative number.'})
+        for name in ('peak_start_hour', 'peak_end_hour'):
+            if not 0 <= value(name) <= 23:
+                raise serializers.ValidationError({name: 'Must be an hour between 0 and 23.'})
+        if value('peak_start_hour') == value('peak_end_hour'):
+            raise serializers.ValidationError({'peak_end_hour': 'Must differ from peak_start_hour.'})
+        if value('is_active'):
+            others = TariffPlan.objects.filter(is_active=True)
+            if self.instance:
+                others = others.exclude(pk=self.instance.pk)
+            if others.exists():
+                raise serializers.ValidationError(
+                    {'is_active': 'Another tariff is already active; deactivate it first.'})
+        return attrs
 
 
 class EnergyAlertSerializer(serializers.ModelSerializer):
