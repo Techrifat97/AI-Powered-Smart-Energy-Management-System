@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, CreateAPIView
 from rest_framework.response import Response
@@ -142,13 +143,27 @@ class RecommendationListView(ListAPIView):
         queryset = AIRecommendation.objects.all()
         building_id = self.request.query_params.get('building_id')
         if building_id:
+            try:
+                building_id = int(building_id)
+            except (TypeError, ValueError):
+                raise ValidationError({'building_id': 'Enter a valid integer.'})
             queryset = queryset.filter(building_id=building_id)
         return queryset
 
 
 class RecommendationFeedbackCreateView(CreateAPIView):
     """
-    Store submitted feedback; recommendation comes from the request serializer.
+    Store submitted feedback bound to the recommendation referenced in the URL.
     """
     queryset = RecommendationFeedback.objects.all()
     serializer_class = RecommendationFeedbackSerializer
+
+    def create(self, request, *args, **kwargs):
+        self.recommendation = get_object_or_404(AIRecommendation, pk=self.kwargs['pk'])
+        return super().create(request, *args, **kwargs)
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if hasattr(self, 'recommendation'):
+            context['recommendation'] = self.recommendation
+        return context

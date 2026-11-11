@@ -1,4 +1,5 @@
 from datetime import timedelta, timezone as datetime_timezone
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from unittest.mock import patch
 from django.urls import reverse
@@ -6,7 +7,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from django.utils import timezone
 from monitoring.models import Building, Meter, EnergyReading
-from coach.models import AIRecommendation, LLMRequestLog
+from coach.models import AIRecommendation, LLMRequestLog, RecommendationFeedback
+from coach.serializers import RecommendationFeedbackSerializer
 
 
 @patch.dict('os.environ', {'OPENAI_API_KEY': ''})
@@ -57,3 +59,87 @@ class CoachAPITests(TestCase):
         self.assertIn('sustainability_score', response.data['sustainability_assessment'])
         self.assertTrue(AIRecommendation.objects.filter(building=self.building).exists())
         self.assertTrue(LLMRequestLog.objects.exists())
+
+    def test_recommendation_list_and_building_filter(self):
+        other = Building.objects.create(name="Other Building", has_solar_installation=False)
+        rec1 = AIRecommendation.objects.create(
+            building=self.building, title="Rec 1", suggested_action="Do A"
+        )
+        rec2 = AIRecommendation.objects.create(
+            building=other, title="Rec 2", suggested_action="Do B"
+        )
+        url = reverse('recommendation-list')
+
+        all_resp = self.client.get(url)
+        self.assertEqual(all_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual({r['id'] for r in all_resp.data['results']}, {rec1.id, rec2.id})
+
+        filtered = self.client.get(url, {'building_id': self.building.id})
+        self.assertEqual(filtered.status_code, status.HTTP_200_OK)
+        self.assertEqual([r['id'] for r in filtered.data['results']], [rec1.id])
+
+        empty = self.client.get(url, {'building_id': -1})
+        self.assertEqual(empty.status_code, status.HTTP_200_OK)
+        self.assertEqual(empty.data['results'], [])
+
+        invalid = self.client.get(url, {'building_id': 'not-an-int'})
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_feedback_binds_url_recommendation_and_allows_matching_body(self):
+        rec = AIRecommendation.objects.create(
+            building=self.building, title="Peak Shave", suggested_action="Shift load"
+        )
+        other_rec = AIRecommendation.objects.create(
+            building=self.building, title="HVAC Setback", suggested_action="Adjust setpoint"
+        )
+        url = reverse('recommendation-feedback', kwargs={'pk': rec.id})
+
+        without_body_id = self.client.post(
+            url, {'rating': 4, 'is_accepted': True, 'comment': 'Helpful'}, format='json'
+        )
+        self.assertEqual(without_body_id.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(without_body_id.data['recommendation'], rec.id)
+        self.assertEqual(
+            RecommendationFeedback.objects.get(pk=without_body_id.data['id']).recommendation_id,
+            rec.id,
+        )
+
+        with_matching_id = self.client.post(
+            url, {'recommendation': rec.id, 'rating': 5}, format='json'
+        )
+        self.assertEqual(with_matching_id.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(with_matching_id.data['recommendation'], rec.id)
+
+        mismatched = self.client.post(
+            url, {'recommendation': other_rec.id, 'rating': 5}, format='json'
+        )
+        self.assertEqual(mismatched.status_code, status.HTTP_400_BAD_REQUEST)
+
+        missing = self.client.post(
+            reverse('recommendation-feedback', kwargs={'pk': 999999}),
+            {'rating': 5},
+            format='json',
+        )
+        self.assertEqual(missing.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_feedback_rating_validation(self):
+        rec = AIRecommendation.objects.create(
+            building=self.building, title="Lighting", suggested_action="Dim corridors"
+        )
+        url = reverse('recommendation-feedback', kwargs={'pk': rec.id})
+
+        for valid_rating in (1, 5):
+            with self.subTest(valid_rating=valid_rating):
+                resp = self.client.post(url, {'rating': valid_rating}, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        for invalid_rating in (-1, 0, 6):
+            with self.subTest(invalid_rating=invalid_rating):
+                resp = self.client.post(url, {'rating': invalid_rating}, format='json')
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                with self.assertRaises(ValidationError):
+                    RecommendationFeedback(recommendation=rec, rating=invalid_rating).full_clean()
+
+        serializer = RecommendationFeedbackSerializer(data={'rating': 4})
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('recommendation', serializer.errors)

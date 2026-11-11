@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.contrib.auth import get_user_model
 
@@ -118,7 +119,11 @@ class RecommendationFeedback(models.Model):
         on_delete=models.CASCADE
     )
     user = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
-    rating = models.IntegerField(default=5, help_text="Rating from 1 (poor) to 5 (excellent)")
+    rating = models.IntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="Rating from 1 (poor) to 5 (excellent)",
+    )
     is_accepted = models.BooleanField(default=True)
     comment = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
