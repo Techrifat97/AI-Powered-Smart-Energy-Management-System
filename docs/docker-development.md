@@ -2,8 +2,8 @@
 
 This local-only stack runs the simulator-backed project. Examples use Bash/zsh
 on macOS/Linux from the repository root. Gunicorn serves the Django JSON APIs
-with worker management and graceful termination. No frontend service is started
-because the frontend directory is a placeholder. [Host development](host-development.md)
+with worker management and graceful termination. No frontend service is started;
+the Streamlit dashboard runs on the host (see `frontend/README.md`). [Host development](host-development.md)
 uses an independent PostgreSQL configuration.
 
 ## First setup

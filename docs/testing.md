@@ -80,6 +80,6 @@ Timing-sensitive tests use controlled clocks rather than minute-long waits.
 
 Passing tests do not demonstrate calibrated forecast accuracy, measured savings,
 realistic weather/building behavior, performance under load or secure public
-access. The frontend, current UML and presentation deliverables are not supplied
+access. The dashboard, current UML and presentation deliverables are not covered
 by the backend tests. Migration tests operate on disposable schemas; they are not
 an audit or repair of the running application's legacy data.
