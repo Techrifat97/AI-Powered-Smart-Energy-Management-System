@@ -17,7 +17,8 @@ Set `SMART_ENERGY_API` to use another API address.
 | Scenarios | S3 what-if scenarios | Done |
 | Alerts | S3 detection, list, resolve | Done |
 | Reports | S3 cost reports | Done |
-| Forecast, Recommendations | S2 | Placeholders, to be connected after S2 review |
+| Forecast | S2 seven-day forecast with bands | Done |
+| Recommendations | S2 generate, list and feedback (1-5 rating) | Done |
 
 Empty states are expected on a fresh database: costs need an active tariff, reports
 need fully covered UTC days and forecasts need two complete UTC days.

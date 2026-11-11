@@ -219,14 +219,72 @@ def reports():
 
 def forecast():
     st.header("Forecast (S2)")
-    st.info("Placeholder: to be connected to `/api/buildings/{id}/forecast/` once S2 is reviewed. "
-            "Forecasts need at least two complete UTC days of data.")
+    st.caption("Seven-day heuristic forecast. Bands are illustrative, not a calibrated model. "
+               "Needs at least two fully covered UTC days in the last 14 days.")
+    data, err = call("GET", f"/buildings/{building_id}/forecast/")
+    if show(err):
+        return
+    rows = data.get("forecast") or []
+    if not rows:
+        reason = (data.get("availability") or {}).get("reason", "unknown")
+        st.info(f"Forecast unavailable: {reason}")
+    else:
+        cols = st.columns(2)
+        with cols[0]:
+            metric("Predicted next 7 days", data["total_predicted_7d_kwh"], " kWh")
+        with cols[1]:
+            metric("Average per day", data["avg_daily_predicted_kwh"], " kWh")
+        frame = pd.DataFrame(rows)
+        frame["forecast_date"] = pd.to_datetime(frame["forecast_date"])
+        st.line_chart(frame.set_index("forecast_date")[
+            ["predicted_kwh", "confidence_lower_kwh", "confidence_upper_kwh"]])
+        st.dataframe(frame[["forecast_date", "predicted_kwh", "confidence_lower_kwh",
+                            "confidence_upper_kwh", "trend"]], width="stretch")
+    with st.expander("Availability details"):
+        st.json(data.get("availability") or {})
 
 
 def recommendations():
     st.header("Recommendations (S2)")
-    st.info("Placeholder: to be connected to `/api/recommendations/` and the feedback endpoint "
-            "once S2 is reviewed.")
+    st.caption("Rule-based by default (external AI is disabled in Docker). Goals and scores are "
+               "illustrative; monetary savings belong to S3.")
+    target = st.slider("Target savings (%)", 1, 50, 15)
+    if st.button("Generate recommendations"):
+        data, err = call("POST", "/recommendations/generate/",
+                         json={"building_id": building_id, "target_savings_pct": target})
+        if show(err):
+            return
+        availability = data.get("availability") or {}
+        if not availability.get("available"):
+            st.info(f"Not enough data yet: {availability.get('reason')}")
+        else:
+            st.success(f"{len(data.get('recommendations', []))} recommendation(s) stored "
+                       f"(engine: {data['engine_telemetry']['source']}).")
+        with st.expander("Sustainability assessment"):
+            st.json(data.get("sustainability_assessment") or {})
+    st.subheader("Stored recommendations")
+    data, err = call("GET", "/recommendations/", params={"building_id": building_id})
+    if show(err):
+        return
+    rows = results(data)
+    if not rows:
+        st.info("No recommendations yet. They need the same complete-day history as forecasts.")
+    for rec in rows:
+        with st.container(border=True):
+            st.markdown(f"**{rec['title']}**  \n{rec['category_display']} | priority "
+                        f"{rec['priority_display']} | source {rec['source']} | status {rec['status']}")
+            st.write(rec["suggested_action"])
+            st.caption(f"Estimated saving: {rec['estimated_savings_kwh']} kWh | "
+                       f"confidence: {rec['confidence_score']}")
+            with st.form(f"feedback{rec['id']}"):
+                rating = st.slider("Rating", 1, 5, 5, key=f"rate{rec['id']}")
+                accepted = st.checkbox("Accepted", True, key=f"acc{rec['id']}")
+                comment = st.text_input("Comment", key=f"com{rec['id']}")
+                if st.form_submit_button("Send feedback"):
+                    _, err = call("POST", f"/recommendations/{rec['id']}/feedback/",
+                                  json={"rating": rating, "is_accepted": accepted, "comment": comment})
+                    if not show(err):
+                        st.success("Feedback stored.")
 
 
 PAGES = {"Overview": overview, "Costs": costs, "Scenarios": scenarios, "Alerts": alerts,
