@@ -21,10 +21,10 @@ The current application targets local development and university demonstrations.
 | --- | --- | --- |
 | S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, simulated telemetry, history and summaries | Activation history and reviewed legacy-data repair workflows |
 | S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
-| S3 analysis | Global tariff configuration, interval import/export cost estimates, stored alert listing and updates | Automatic alert generation, report-generation workflow and historical/per-building tariffs |
+| S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection with resolve/filter | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
 | Runtime | Docker Compose database, migration job, Gunicorn API server and separate telemetry worker | Public deployment hardening and operational backup/restore tooling |
 | Accounts | Installed Django app scaffold; Django's built-in auth/admin components remain available | Custom account/authentication APIs and per-user building permissions |
-| Frontend and submission artifacts | Placeholder directories | Streamlit application, UML diagrams and current presentation files are not tracked |
+| Frontend | Streamlit dashboard (`frontend/app.py`): overview, costs, scenarios, alerts, reports, forecast, recommendations and feedback | Runs on the host, not in Docker Compose; no login |
 
 ## Architecture and data flow
 
@@ -54,8 +54,8 @@ flowchart LR
     Coach --> DB
 ```
 
-Arrows show service calls and database access. The frontend placeholder does not
-currently provide a dashboard.
+Arrows show service calls and database access. The Streamlit dashboard in `frontend/`
+calls the HTTP APIs from the host.
 
 ## Repository structure
 
@@ -72,9 +72,9 @@ currently provide a dashboard.
 │   │   ├── services/             # Inventory, ingestion, generator, aggregation
 │   │   └── management/commands/  # run_telemetry, setup_demo_inventory, seed_demo_data
 │   ├── coach/                    # Forecasting, recommendations, assessment
-│   ├── analysis/                 # Tariffs, cost estimates, stored alerts
+│   ├── analysis/                 # Tariffs, costs, scenarios, reports, alert detection
 │   └── accounts/                 # Scaffold
-├── frontend/                     # Placeholder
+├── frontend/                     # Streamlit dashboard (see frontend/README.md)
 └── docs/                         # Setup, API and measurement documentation
     ├── uml/                      # Placeholder
     └── presentations/            # Placeholder
@@ -146,9 +146,11 @@ subsystems' routes. The table uses the shared `/api/` convenience prefix.
 | S2 | `/api/recommendations/generate/` | POST | Generate/store recommendations when observations suffice |
 | S2 | `/api/recommendations/` | GET | List stored recommendations |
 | S2 | `/api/recommendations/{id}/feedback/` | POST | Store validated feedback (`1–5` rating) for `{id}` |
-| S3 | `/api/tariffs/` | GET, POST | List/create global tariff plans |
+| S3 | `/api/tariffs/`, `/api/tariffs/{id}/` | GET, POST; GET, PUT, PATCH | List/create/update validated tariff plans (one active) |
 | S3 | `/api/buildings/{id}/cost/` | GET | Interval-based tariff scenario |
-| S3 | `/api/alerts/`, `/api/alerts/{id}/` | GET; GET, PUT, PATCH | List or update stored alerts |
+| S3 | `/api/buildings/{id}/scenarios/` | POST | What-if re-pricing (tariff, consumption, solar) |
+| S3 | `/api/buildings/{id}/reports/`, `/api/reports/` | GET, POST; GET | Generate and list stored cost reports |
+| S3 | `/api/alerts/`, `/api/alerts/detect/`, `/api/alerts/{id}/` | GET; POST; GET, PUT, PATCH | List, detect and resolve alerts (only `is_resolved` is writable) |
 
 Forecasting requires at least two complete UTC days in the preceding 14 completed
 calendar days. A fresh demo may therefore return unavailable results. Cost
@@ -187,7 +189,7 @@ an assessment of capstone completeness.
 - Permissions are `AllowAny`, CORS is permissive, and custom authentication and
   per-user access control are incomplete. Localhost binding is not sufficient
   for public internet deployment.
-- Dashboard, current UML diagrams and presentation artifacts remain placeholders.
+- The dashboard has no authentication, and current UML diagrams are not tracked.
   Submission requirements must be assessed against the university rubric.
 
 ## Documentation

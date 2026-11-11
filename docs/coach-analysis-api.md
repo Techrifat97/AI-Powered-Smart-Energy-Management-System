@@ -61,10 +61,35 @@ user reference is not verified ownership.
 
 | Route | Methods | Behavior |
 | --- | --- | --- |
-| `/api/tariffs/` | GET, POST | List/create global scenario tariffs. |
+| `/api/tariffs/` | GET, POST | List/create global scenario tariffs (validated; only one may be active). |
+| `/api/tariffs/{id}/` | GET, PUT, PATCH | Retrieve/update a tariff, e.g. deactivate it. |
 | `/api/buildings/{id}/cost/` | GET | Estimate costs from recorded matched intervals. |
-| `/api/alerts/` | GET | List stored alerts; optional `building_id`. |
-| `/api/alerts/{id}/` | GET, PUT, PATCH | Retrieve/update stored alert fields. |
+| `/api/buildings/{id}/scenarios/` | POST | What-if re-pricing: alternative tariff, consumption and solar change. |
+| `/api/buildings/{id}/reports/` | GET, POST | List/generate stored cost reports for an inclusive UTC date range. |
+| `/api/reports/` | GET | Paginated stored cost reports; optional `building_id`. |
+| `/api/alerts/` | GET | List stored alerts; optional `building_id`, `is_resolved`, `severity`, `alert_type`. |
+| `/api/alerts/detect/` | POST | Run rule-based detection for `{"building_id":1}` and store new alerts. |
+| `/api/alerts/{id}/` | GET, PUT, PATCH | Retrieve an alert; only `is_resolved` can be changed. |
+
+### Scenarios, reports and alert rules
+
+`POST /api/buildings/{id}/scenarios/` accepts optional `tariff` (rates, peak hours;
+never stored), `consumption_change_pct` and `solar_change_pct` (signed). It returns
+baseline (active tariff) and scenario import/export kWh and costs plus the net-cost
+difference. It needs the same complete coverage as the cost estimate; otherwise
+`available=false` with a reason.
+
+`POST /api/buildings/{id}/reports/` with `{"period_start":"2026-01-05","period_end":"2026-01-05"}`
+stores a `CostReport` (net cost from estimated imports minus export credit). Both
+dates are inclusive UTC days and must be continuously covered by main readings;
+otherwise HTTP 422 with a reason and nothing stored.
+
+Alert detection is a simple threshold heuristic, not a statistical model:
+`PEAK_SPIKE` (latest power above 2x the 24 h mean), `UNUSUAL_NIGHT_LOAD` (00:00-04:59 UTC
+mean above 50 % of the daytime mean), `BUDGET_EXCEEDED` (latest complete UTC day above the
+building baseline), `METER_OFFLINE` (no reading for 15 minutes). Rules stay silent on too
+little data, and an unresolved alert of the same type/meter is not duplicated. Detection runs
+only when `/api/alerts/detect/` is called; there is no background scheduler.
 
 Cost calculations require exactly **one active global tariff**. Check the existing
 list before creating a plan; POST is not an idempotent configuration operation.
@@ -78,8 +103,8 @@ curl -fsS -X POST http://127.0.0.1:8000/api/tariffs/ \
 curl -fsS http://127.0.0.1:8000/api/buildings/1/cost/
 ```
 
-The tariff API permits multiple active plans and provides no tariff update route.
-Existing plans require admin or reviewed database management. Missing/multiple
+The tariff API rejects invalid rates/hours and a second active plan; deactivate
+the current one via PATCH first (the admin can still bypass this check). Missing/multiple
 active tariffs produce unavailable costs rather than an arbitrary selection. The
 cost service rejects invalid rates/hours; tariff storage itself does not enforce
 all those calculation rules.
@@ -93,9 +118,8 @@ contract. Gaps or unavailable measurements remain explicit. See the
 for fields, signed balances, import/export estimates and nullable legacy totals.
 
 Cost responses are not complete utility bills: taxes, fixed fees, contract history
-and a billing-period model are absent. Stored `CostReport` models/serializers do
-not constitute an implemented report-generation workflow. Alert APIs operate on
-stored records; automatic anomaly detection or alert creation is not implemented.
+and a billing-period model are absent. Reports are scenario estimates over a
+covered period, not invoices.
 
 The current `AllowAny` policy and permissive CORS apply across these endpoints.
 They are not suitable for public deployment without access-control work. Test

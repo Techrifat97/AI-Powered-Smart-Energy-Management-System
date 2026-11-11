@@ -34,8 +34,8 @@ def _interval_rate(row, tariff):
     return rates.pop() if len(rates) == 1 else None
 
 
-def cost_analysis(building):
-    report = building_energy_report(building)
+def cost_analysis(building, start=None, end=None):
+    report = building_energy_report(building, start=start, end=end)
     summary = report['summary']
     tariffs = list(TariffPlan.objects.filter(is_active=True)[:2])
     tariff = tariffs[0] if len(tariffs) == 1 else None
