@@ -48,16 +48,14 @@ Weekly energy goals and scores are illustrative, not measured savings. Monetary
 recommendation savings and the daily cost field are unavailable; tariff estimates
 belong to S3. The fixed carbon factor is a scenario assumption.
 
-### Feedback limitations
+### Feedback behavior and limitations
 
-Feedback stores a recommendation reference, optional user, integer rating,
+Feedback stores a recommendation reference, optional user, integer rating (`1–5`),
 acceptance flag and comment. It does not train or update the recommendation engine.
-The current create view uses the recommendation ID from the request body and does
-not bind it to the ID in the URL. The intended 1–5 rating range is described in
-model help text but is not enforced by rating validators. Clients should submit
-matching IDs and ratings in range; these are implementation validation gaps,
-not server guarantees. Authentication is not required by the current permission
-policy, so a submitted user reference is not verified ownership.
+`POST /api/recommendations/{id}/feedback/` binds the feedback to `{id}` in the URL
+(if `recommendation` is also supplied in the request body, it must match `{id}`).
+Authentication is not required by the current permission policy, so a submitted
+user reference is not verified ownership.
 
 ## S3 routes and prerequisites
 

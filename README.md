@@ -20,7 +20,7 @@ The current application targets local development and university demonstrations.
 | Area | Implemented | Incomplete or limited |
 | --- | --- | --- |
 | S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, simulated telemetry, history and summaries | Activation history and reviewed legacy-data repair workflows |
-| S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and complete feedback validation |
+| S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
 | S3 analysis | Global tariff configuration, interval import/export cost estimates, stored alert listing and updates | Automatic alert generation, report-generation workflow and historical/per-building tariffs |
 | Runtime | Docker Compose database, migration job, Gunicorn API server and separate telemetry worker | Public deployment hardening and operational backup/restore tooling |
 | Accounts | Installed Django app scaffold; Django's built-in auth/admin components remain available | Custom account/authentication APIs and per-user building permissions |
@@ -145,7 +145,7 @@ subsystems' routes. The table uses the shared `/api/` convenience prefix.
 | S2 | `/api/buildings/{id}/forecast/` | GET, POST | Calculate and store a seven-day daily heuristic forecast |
 | S2 | `/api/recommendations/generate/` | POST | Generate/store recommendations when observations suffice |
 | S2 | `/api/recommendations/` | GET | List stored recommendations |
-| S2 | `/api/recommendations/{id}/feedback/` | POST | Store feedback; URL/body validation limitations apply |
+| S2 | `/api/recommendations/{id}/feedback/` | POST | Store validated feedback (`1–5` rating) for `{id}` |
 | S3 | `/api/tariffs/` | GET, POST | List/create global tariff plans |
 | S3 | `/api/buildings/{id}/cost/` | GET | Interval-based tariff scenario |
 | S3 | `/api/alerts/`, `/api/alerts/{id}/` | GET; GET, PUT, PATCH | List or update stored alerts |

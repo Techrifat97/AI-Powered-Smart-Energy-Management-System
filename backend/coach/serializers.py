@@ -62,7 +62,27 @@ class GenerateRecommendationInputSerializer(serializers.Serializer):
 
 
 class RecommendationFeedbackSerializer(serializers.ModelSerializer):
+    recommendation = serializers.PrimaryKeyRelatedField(
+        queryset=AIRecommendation.objects.all(),
+        required=False,
+    )
+
     class Meta:
         model = RecommendationFeedback
         fields = ['id', 'recommendation', 'user', 'rating', 'is_accepted', 'comment', 'created_at']
+
+    def validate(self, attrs):
+        url_recommendation = self.context.get('recommendation')
+        body_recommendation = attrs.get('recommendation')
+        if url_recommendation is not None:
+            if body_recommendation is not None and body_recommendation.pk != url_recommendation.pk:
+                raise serializers.ValidationError({
+                    'recommendation': 'Recommendation ID in body must match the recommendation ID in the URL.'
+                })
+            attrs['recommendation'] = url_recommendation
+        elif body_recommendation is None:
+            raise serializers.ValidationError({
+                'recommendation': 'This field is required.'
+            })
+        return attrs
 
