@@ -5,8 +5,8 @@ Run from the repository root with the API running (see docs/docker-development.m
     pip install -r frontend/requirements.txt
     streamlit run frontend/app.py
 
-S1 (overview) and S3 (costs, scenarios, alerts, reports) are wired up. The S2
-pages (forecast, recommendations, feedback) are placeholders to consume later.
+S1 provides energy monitoring; S2 provides forecasts, recommendations and
+feedback; S3 provides cost, scenario, alert and report views.
 """
 import os
 from datetime import date, timedelta
@@ -58,8 +58,19 @@ if show(err) or not results(buildings):
     st.stop()
 options = {b["name"]: b["id"] for b in results(buildings)}
 building_id = options[st.sidebar.selectbox("Building", list(options))]
-page = st.sidebar.radio("Page", ["Overview", "Costs", "Scenarios", "Alerts", "Reports",
-                                 "Forecast", "Recommendations"])
+page = st.sidebar.radio(
+    "Page",
+    [
+        "Overview",
+        "Meter Management",
+        "Costs",
+        "Scenarios",
+        "Alerts",
+        "Reports",
+        "Forecast",
+        "Recommendations"
+    ]
+)
 if st.sidebar.button("Refresh"):
     st.rerun()
 st.sidebar.caption(f"API: {API}")
@@ -94,6 +105,95 @@ def overview():
         st.line_chart(frame.pivot_table(index="timestamp", columns="meter_type", values="power_kw"))
         st.dataframe(frame[["timestamp", "meter_device_id", "meter_type", "energy_kwh", "power_kw"]],
                      width="stretch")
+
+def meter_management():
+    st.header("Meter Management (S1)")
+    st.caption("Manage building meters and their telemetry status.")
+
+    # Get meters for the selected building
+    data, err = call("GET", f"/buildings/{building_id}/meters/")
+
+    if show(err):
+        return
+
+    meters = results(data)
+
+    st.subheader("Existing Meters")
+
+    if not meters:
+        st.info("No meters found for this building.")
+
+    for meter in meters:
+        col1, col2 = st.columns([4, 1])
+
+        with col1:
+            st.write(f"**{meter['device_id']}**")
+            st.caption(
+                f"Type: {meter['meter_type_display']} | "
+                f"Status: {'Active' if meter['is_active'] else 'Inactive'}"
+            )
+
+        with col2:
+            active = meter["is_active"]
+            button_text = "Deactivate" if active else "Activate"
+
+            if st.button(button_text, key=f"meter_{meter['id']}"):
+                updated_status = not active
+
+                _, err = call(
+                    "PATCH",
+                    f"/meters/{meter['id']}/",
+                    json={"is_active": updated_status}
+                )
+
+                if not show(err):
+                    st.success("Meter status updated!")
+                    st.rerun()
+
+    st.divider()
+
+    # Add a new meter
+    st.subheader("Add New Meter")
+
+    with st.form("add_meter_form"):
+        device_id = st.text_input(
+            "Meter Device ID",
+            placeholder="METER-HVAC-002"
+        )
+
+        meter_type = st.selectbox(
+            "Meter Type",
+            ["ELECTRICITY", "HVAC", "LIGHTING", "SOLAR"]
+        )
+
+        is_active = st.checkbox(
+            "Activate immediately",
+            value=False
+        )
+
+        submitted = st.form_submit_button("Add Meter")
+
+    if submitted:
+        if not device_id.strip():
+            st.error("Please enter a Meter Device ID.")
+        else:
+            payload = {
+                "device_id": device_id.strip(),
+                "meter_type": meter_type,
+                "unit": "kWh",
+                "is_active": is_active
+            }
+
+            _, err = call(
+                "POST",
+                f"/buildings/{building_id}/meters/",
+                json=payload
+            )
+
+            if not show(err):
+                st.success("New meter added successfully!")
+                st.rerun()
+
 
 
 def costs():
@@ -218,7 +318,7 @@ def reports():
 
 
 def forecast():
-    st.header("Forecast (S2)")
+    st.header("Forecast")
     st.caption("Seven-day heuristic forecast. Bands are illustrative, not a calibrated model. "
                "Needs at least two fully covered UTC days in the last 14 days.")
     data, err = call("GET", f"/buildings/{building_id}/forecast/")
@@ -245,9 +345,9 @@ def forecast():
 
 
 def recommendations():
-    st.header("Recommendations (S2)")
-    st.caption("Rule-based by default (external AI is disabled in Docker). Goals and scores are "
-               "illustrative; monetary savings belong to S3.")
+    st.header("Recommendations")
+    st.caption("Recommendations use the configured AI provider or rule-based fallback. "
+               "Goals and scores are illustrative; monetary savings belong to S3.")
     target = st.slider("Target savings (%)", 1, 50, 15)
     if st.button("Generate recommendations"):
         data, err = call("POST", "/recommendations/generate/",
@@ -287,6 +387,15 @@ def recommendations():
                         st.success("Feedback stored.")
 
 
-PAGES = {"Overview": overview, "Costs": costs, "Scenarios": scenarios, "Alerts": alerts,
-         "Reports": reports, "Forecast (S2)": forecast, "Recommendations (S2)": recommendations}
+PAGES = {
+    "Overview": overview,
+    "Meter Management": meter_management,
+    "Costs": costs,
+    "Scenarios": scenarios,
+    "Alerts": alerts,
+    "Reports": reports,
+    "Forecast": forecast,
+    "Recommendations": recommendations
+}
+
 PAGES[page]()
