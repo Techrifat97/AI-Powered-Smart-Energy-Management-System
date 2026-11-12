@@ -90,6 +90,23 @@ class ScenarioRequestSerializer(serializers.Serializer):
     consumption_change_pct = serializers.FloatField(default=0.0, min_value=-100, max_value=1000)
     solar_change_pct = serializers.FloatField(default=0.0, min_value=-100, max_value=1000)
 
+    period_start = serializers.DateField(required=False)
+    period_end = serializers.DateField(required=False)
+
+    def validate(self, attrs):
+        from datetime import date
+        start, end = attrs.get('period_start'), attrs.get('period_end')
+        if (start is None) != (end is None):
+            raise serializers.ValidationError('Provide period_start and period_end together.')
+        if start is not None and start > end:
+            raise serializers.ValidationError({'period_end': 'Must not be before period_start.'})
+        if end == date.max:
+            raise serializers.ValidationError({'period_end': 'The following UTC day must be representable.'})
+        for name in ('consumption_change_pct', 'solar_change_pct'):
+            if not isfinite(attrs[name]):
+                raise serializers.ValidationError({name: 'Must be finite.'})
+        return attrs
+
 
 class CostReportRequestSerializer(serializers.Serializer):
     period_start = serializers.DateField()

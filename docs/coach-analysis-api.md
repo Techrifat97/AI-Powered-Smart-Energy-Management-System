@@ -41,7 +41,7 @@ recommendations and engine status `NOT_RUN`. Forecast calculation may still have
 stored valid forecasts before recommendation eligibility is determined. A usable
 generation returns HTTP 201 and stores recommendations plus an execution log.
 
-Docker explicitly disables external AI calls. Without a usable configured key,
+Leave `OPENAI_API_KEY` unset to disable external AI calls in Docker. Without a usable configured key,
 the deterministic rule-based provider is used. Optional OpenAI requests use the
 configured model and record tokens, latency and status; tests mock this integration.
 Weekly energy goals and scores are illustrative, not measured savings. Monetary
@@ -76,8 +76,25 @@ user reference is not verified ownership.
 `POST /api/buildings/{id}/scenarios/` accepts optional `tariff` (rates, peak hours;
 never stored), `consumption_change_pct` and `solar_change_pct` (signed). It returns
 baseline (active tariff) and scenario import/export kWh and costs plus the net-cost
-difference. It needs the same complete coverage as the cost estimate; otherwise
-`available=false` with a reason.
+difference. Optional `period_start` and `period_end` select **inclusive UTC dates**;
+provide both together, with start <= end. Invalid/missing paired dates return 400.
+The response echoes the selected dates. Omitted dates retain all-recorded-history
+behavior and its original response keys. Both prices use exactly the same bounded
+S1 report, requiring continuous main coverage and matched solar intervals (or
+explicit no-solar metadata). Missing intervals remain unavailable, never zero-filled.
+An unrelated live-data gap outside the requested dates does not invalidate them.
+
+Example (replace dates with complete previous days from your demo):
+
+```sh
+curl -fsS -X POST http://127.0.0.1:8000/api/buildings/1/scenarios/ \
+  -H 'Content-Type: application/json' \
+  -d '{"period_start":"2026-11-01","period_end":"2026-11-07","consumption_change_pct":-10,"solar_change_pct":0}'
+```
+
+Incomplete/ambiguous data returns HTTP 200 with `available=false`, a reason and null
+prices. No-date requests can still return `coverage_incomplete` across a live gap;
+select fully covered historical dates rather than weakening data-quality checks.
 
 `POST /api/buildings/{id}/reports/` with `{"period_start":"2026-01-05","period_end":"2026-01-05"}`
 stores a `CostReport` (net cost from estimated imports minus export credit). Both

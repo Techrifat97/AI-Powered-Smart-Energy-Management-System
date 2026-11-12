@@ -19,25 +19,29 @@ The current application targets local development and university demonstrations.
 
 | Area | Implemented | Incomplete or limited |
 | --- | --- | --- |
-| S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, simulated telemetry, history and summaries | Activation history and reviewed legacy-data repair workflows |
+| S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, OOP telemetry profiles, Kafka outbox/consumer, automatic demo history, history and summaries | Activation history and reviewed legacy-data repair workflows |
 | S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
 | S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection with resolve/filter | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
-| Runtime | Docker Compose database, migration job, Gunicorn API server and separate telemetry worker | Public deployment hardening and operational backup/restore tooling |
+| Runtime | Docker Compose PostgreSQL, migration/bootstrap jobs, Gunicorn, KRaft Kafka, producer and consumer | Public deployment hardening and operational backup/restore tooling |
 | Accounts | Installed Django app scaffold; Django's built-in auth/admin components remain available | Custom account/authentication APIs and per-user building permissions |
-| Frontend | Streamlit dashboard (`frontend/app.py`): overview, costs, scenarios, alerts, reports, forecast, recommendations and feedback | Runs on the host, not in Docker Compose; no login |
+| Frontend | Streamlit dashboard (`frontend/app.py`): overview, building/meter management, dated scenarios, costs, alerts, reports, forecast, recommendations and feedback | Runs on the host, not in Docker Compose; no login |
 
 ## Architecture and data flow
 
 The backend uses Django 5.2, Django REST Framework and PostgreSQL exclusively.
-The telemetry command discovers current inventory each cycle and saves readings
-through the S1 ingestion service. Management APIs use the inventory service;
+The telemetry producer discovers current inventory each cycle, freezes a durable
+building-minute batch, and publishes it to Kafka. The consumer saves each batch
+atomically through the S1 ingestion service. Management APIs use the inventory service;
 reading history uses the ORM. S1 summaries, S2 and S3 call the **same S1 Python
 aggregation functions inside Django**. S2/S3 do not call the S1 summary HTTP route.
 Forecasts, recommendations and request logs are stored in PostgreSQL.
 
 ```mermaid
 flowchart LR
-    Worker[Telemetry worker] --> Ingestion[S1 ingestion]
+    Worker[OOP telemetry producer] --> Outbox[(PostgreSQL outbox)]
+    Outbox --> Kafka[Kafka: energy.readings.raw]
+    Kafka --> Consumer[S1 consumer]
+    Consumer --> Ingestion[S1 validated ingestion]
     Ingestion --> DB[(PostgreSQL)]
     Clients[REST clients] --> API[Django REST APIs]
     API --> Inventory[S1 inventory]
@@ -69,14 +73,14 @@ calls the HTTP APIs from the host.
 │   ├── config/                   # Settings, routes and WSGI/ASGI entry points
 │   ├── monitoring/
 │   │   ├── models.py, serializers.py, views.py, urls.py
-│   │   ├── services/             # Inventory, ingestion, generator, aggregation
-│   │   └── management/commands/  # run_telemetry, setup_demo_inventory, seed_demo_data
+│   │   ├── services/             # Inventory, ingestion, profiles, Kafka, demo, aggregation
+│   │   └── management/commands/  # run_telemetry, consume_telemetry, bootstrap_demo
 │   ├── coach/                    # Forecasting, recommendations, assessment
 │   ├── analysis/                 # Tariffs, costs, scenarios, reports, alert detection
 │   └── accounts/                 # Scaffold
 ├── frontend/                     # Streamlit dashboard (see frontend/README.md)
 └── docs/                         # Setup, API and measurement documentation
-    ├── uml/                      # Placeholder
+    ├── uml/                      # S1 OOP class diagram
     └── presentations/            # Placeholder
 ```
 
@@ -99,21 +103,23 @@ Bash functions and heredocs are not PowerShell syntax.
    dc ps -a
    ```
 
-   Database and backend should be healthy, telemetry running, and `migrate`
-   **Exited (0)**. Startup applies migrations to Docker's database only; it does
-   not create inventory or copy host data.
-3. Explicitly initialize the demo:
+   PostgreSQL, Kafka and backend should be healthy; `telemetry` (Kafka producer)
+   and `consumer` running. `migrate`, `demo_bootstrap` and `kafka_init` should
+   show **Exited (0)**. With `DEMO_MODE=true` (default), a fresh database gets
+   one dedicated demo building, four meters, 14 complete previous UTC days of
+   hourly synthetic data, and a demo tariff. Existing records are preserved.
+3. Start the host dashboard in a separate terminal:
 
    ```sh
-   dc exec backend python backend/manage.py setup_demo_inventory
-   dc logs --tail 10 telemetry
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -r frontend/requirements.txt
+   streamlit run frontend/app.py
    ```
 
-   The command creates one building and four active meters, or verifies an
-   already-compatible set without overwriting it. Incompatible inventory is
-   rejected. Wait two UTC minute boundaries after meter creation for the first
-   eligible completed interval. A meter created at 12:00:30 can first receive the
-   12:01–12:02 reading, processed at 12:02.
+   Select the demo building. Forecast and rule-based recommendations work without
+   an OpenAI key. On Scenarios/Reports choose complete previous UTC days. User-created
+   buildings start with no invented history; add and activate their meters.
 4. Inspect the APIs, substituting the printed building ID:
 
    ```sh
@@ -153,9 +159,9 @@ subsystems' routes. The table uses the shared `/api/` convenience prefix.
 | S3 | `/api/alerts/`, `/api/alerts/detect/`, `/api/alerts/{id}/` | GET; POST; GET, PUT, PATCH | List, detect and resolve alerts (only `is_resolved` is writable) |
 
 Forecasting requires at least two complete UTC days in the preceding 14 completed
-calendar days. A fresh demo may therefore return unavailable results. Cost
+calendar days. Fresh automatic demo history meets this requirement; new user buildings need history first. Cost
 estimates require matched intervals and exactly one applicable active global
-tariff. Docker leaves external AI calls disabled. See the
+tariff. OpenAI is optional; unset `OPENAI_API_KEY` for the rule-based demonstration. See the
 [S1 API contract](docs/s1-management-api.md) and
 [S2/S3 API guide](docs/coach-analysis-api.md) for request examples and prerequisites.
 
@@ -189,13 +195,15 @@ an assessment of capstone completeness.
 - Permissions are `AllowAny`, CORS is permissive, and custom authentication and
   per-user access control are incomplete. Localhost binding is not sufficient
   for public internet deployment.
-- The dashboard has no authentication, and current UML diagrams are not tracked.
+- The dashboard has no authentication. The [S1 OOP UML](docs/s1-architecture.md) describes implemented classes.
   Submission requirements must be assessed against the university rubric.
 
 ## Documentation
 
 | Guide | Scope |
 | --- | --- |
+| [S1 architecture and UML](docs/s1-architecture.md) | OOP classes and responsibilities |
+| [Kafka pipeline](docs/kafka.md) | Delivery, outbox, consumer, failures and recovery |
 | [Docker development](docs/docker-development.md) | Private configuration, services, demo setup, logs and persistence |
 | [Host development](docs/host-development.md) | Optional virtual environment and host PostgreSQL setup |
 | [Testing](docs/testing.md) | Isolated databases, commands and coverage limits |

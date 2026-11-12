@@ -9,7 +9,8 @@ S1 provides energy monitoring; S2 provides forecasts, recommendations and
 feedback; S3 provides cost, scenario, alert and report views.
 """
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timezone, timedelta
+from urllib.parse import urlsplit, parse_qs
 
 import pandas as pd
 import requests
@@ -50,18 +51,31 @@ def metric(label, value, unit=""):
     st.metric(label, "n/a" if value is None else f"{value:,.2f}{unit}")
 
 
+def all_rows(path):
+    """Follow API pagination without depending on its Docker-internal host name."""
+    rows, params = [], {}
+    while True:
+        data, error = call("GET", path, params=params)
+        if error:
+            return [], error
+        rows.extend(results(data))
+        next_url = data.get("next") if isinstance(data, dict) else None
+        if not next_url:
+            return rows, None
+        params = parse_qs(urlsplit(next_url).query)
+
+
 # --- sidebar ---------------------------------------------------------------
 st.sidebar.title("Smart Energy")
-buildings, err = call("GET", "/buildings/")
-if show(err) or not results(buildings):
-    st.warning("No building found. Run `setup_demo_inventory` (see docs/docker-development.md).")
-    st.stop()
-options = {b["name"]: b["id"] for b in results(buildings)}
-building_id = options[st.sidebar.selectbox("Building", list(options))]
+buildings, err = all_rows("/buildings/")
+show(err)
+options = {f"{b['name']} (#{b['id']})": b["id"] for b in buildings}
+building_id = options[st.sidebar.selectbox("Building", list(options))] if options else None
 page = st.sidebar.radio(
     "Page",
     [
         "Overview",
+        "Building Management",
         "Meter Management",
         "Costs",
         "Scenarios",
@@ -106,17 +120,56 @@ def overview():
         st.dataframe(frame[["timestamp", "meter_device_id", "meter_type", "energy_kwh", "power_kw"]],
                      width="stretch")
 
+def building_management():
+    st.header("Building Management (S1)")
+    st.caption("New buildings start without readings. Configure meters to enable future synthetic telemetry.")
+    if buildings:
+        st.dataframe(pd.DataFrame(buildings), width="stretch")
+    with st.form("add_building"):
+        name = st.text_input("Building name")
+        location = st.text_input("Location")
+        area = st.number_input("Floor area (m²)", min_value=0.01, value=1000.0)
+        baseline = st.number_input("Baseline consumption (kWh/day)", min_value=0.0, value=250.0)
+        solar = st.checkbox("Solar installation exists", value=False)
+        submitted = st.form_submit_button("Create building")
+    if submitted:
+        if not name.strip():
+            st.error("Please enter a building name.")
+        else:
+            _, error = call("POST", "/buildings/", json={"name": name.strip(),
+                "location": location.strip(), "area_sqm": area,
+                "baseline_kwh_per_day": baseline, "has_solar_installation": solar})
+            if not show(error):
+                st.success("Building created. Select it in the sidebar and add meters.")
+                st.rerun()
+    if building_id is not None:
+        meters, error = all_rows(f"/buildings/{building_id}/meters/")
+        if not show(error):
+            st.subheader("Selected building's configured meters")
+            st.dataframe(pd.DataFrame(meters), width="stretch") if meters else st.info("No meters configured yet.")
+
+
 def meter_management():
     st.header("Meter Management (S1)")
     st.caption("Manage building meters and their telemetry status.")
 
     # Get meters for the selected building
-    data, err = call("GET", f"/buildings/{building_id}/meters/")
+    data, err = all_rows(f"/buildings/{building_id}/meters/")
 
     if show(err):
         return
 
     meters = results(data)
+    selected = next(b for b in buildings if b["id"] == building_id)
+    mains = sum(m["is_active"] and m["meter_type"] == "ELECTRICITY" for m in meters)
+    solar_count = sum(m["is_active"] and m["meter_type"] == "SOLAR" for m in meters)
+    if (mains != 1 or selected["has_solar_installation"] is None
+            or (selected["has_solar_installation"] is True and solar_count != 1)
+            or (selected["has_solar_installation"] is False and any(m["meter_type"] == "SOLAR" for m in meters))):
+        st.warning("Telemetry is paused for an incomplete or conflicting inventory. It needs one active main meter, "
+                   "explicit solar status, and one active solar meter if solar is installed.")
+    else:
+        st.info("Inventory is eligible. New meters participate once their first full minute has completed.")
 
     st.subheader("Existing Meters")
 
@@ -137,7 +190,9 @@ def meter_management():
             active = meter["is_active"]
             button_text = "Deactivate" if active else "Activate"
 
-            if st.button(button_text, key=f"meter_{meter['id']}"):
+            required = active and meter["meter_type"] in ("ELECTRICITY", "SOLAR")
+            confirmed = not required or st.checkbox("Confirm: pauses building telemetry", key=f"confirm_{meter['id']}")
+            if st.button(button_text, key=f"meter_{meter['id']}", disabled=not confirmed):
                 updated_status = not active
 
                 _, err = call(
@@ -244,15 +299,23 @@ def costs():
 
 def scenarios():
     st.header("What-if scenarios")
+    yesterday = datetime.now(timezone.utc).date() - timedelta(days=1)
+    start = st.date_input("Start date (UTC, inclusive)", yesterday - timedelta(days=13))
+    end = st.date_input("End date (UTC, inclusive)", yesterday)
+    st.caption(f"Selected period: {start} through {end}, inclusive UTC days. Missing intervals remain unavailable.")
     consumption = st.slider("Consumption change (%)", -100, 100, -10)
     solar = st.slider("Solar output change (%)", -100, 200, 0)
-    body = {"consumption_change_pct": consumption, "solar_change_pct": solar}
+    body = {"consumption_change_pct": consumption, "solar_change_pct": solar,
+            "period_start": str(start), "period_end": str(end)}
     if st.checkbox("Use an alternative tariff"):
         body["tariff"] = {
             "rate_standard_eur_per_kwh": st.number_input("Standard EUR/kWh", 0.0, value=0.25, step=0.01),
             "rate_peak_eur_per_kwh": st.number_input("Peak EUR/kWh", 0.0, value=0.40, step=0.01),
         }
     if st.button("Run scenario"):
+        if start > end:
+            st.error("Start date must not be after end date.")
+            return
         data, err = call("POST", f"/buildings/{building_id}/scenarios/", json=body)
         if show(err):
             return
@@ -389,6 +452,7 @@ def recommendations():
 
 PAGES = {
     "Overview": overview,
+    "Building Management": building_management,
     "Meter Management": meter_management,
     "Costs": costs,
     "Scenarios": scenarios,
@@ -398,4 +462,7 @@ PAGES = {
     "Recommendations": recommendations
 }
 
-PAGES[page]()
+if building_id is None and page != "Building Management":
+    st.info("No building selected. Open Building Management to create the first building.")
+else:
+    PAGES[page]()

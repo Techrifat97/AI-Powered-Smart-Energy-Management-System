@@ -156,3 +156,28 @@ class EnergyReading(models.Model):
 
     def __str__(self):
         return f"{self.meter.device_id} @ {self.timestamp}: {self.energy_kwh:.2f} kWh"
+
+
+class DemoDataset(models.Model):
+    """Stable demo identity; names and user-managed inventory remain editable."""
+    key = models.CharField(max_length=64, primary_key=True)
+    building = models.OneToOneField(Building, on_delete=models.PROTECT)
+    history_start = models.DateField(null=True)
+    history_end = models.DateField(null=True)
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+
+class TelemetryBatch(models.Model):
+    """Durable producer outbox and atomic consumer receipt for one building-minute."""
+    id = models.UUIDField(primary_key=True, editable=False)
+    building = models.ForeignKey(Building, on_delete=models.PROTECT)
+    timestamp = models.DateTimeField()
+    payload = models.JSONField()
+    published_at = models.DateTimeField(null=True)
+    processed_at = models.DateTimeField(null=True)
+    rejected_at = models.DateTimeField(null=True)
+    last_error = models.TextField(blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(
+            fields=['building', 'timestamp'], name='s1_batch_building_minute_unique')]

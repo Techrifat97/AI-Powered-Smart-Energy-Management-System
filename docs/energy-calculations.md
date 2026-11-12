@@ -176,8 +176,9 @@ zeros and 1,008 readings across three meters. It uses fixed building/device name
 and a main-reading-count threshold to skip populated fixtures; this is not a
 validation or repair of existing datasets. Partial/incompatible fixtures require
 review. It writes hourly data separately from the minute-ingestion service and is
-not called at startup. Routine demonstrations use explicit inventory plus the
-[minute simulator](simulated-telemetry.md).
+not called at startup. Demo-mode startup uses the separate safe `bootstrap_demo`
+service for complete 14-day history, followed by the [Kafka minute simulator](kafka.md).
+It preserves old records and never treats hourly data as minute data.
 
 Schema setup is documented separately for [Docker](docker-development.md#services-and-startup)
 and [host development](host-development.md#schema-and-processes). Automated checks
@@ -185,6 +186,6 @@ use the [isolated testing workflow](testing.md), not an application database.
 
 S1 centralizes coverage and measurement rules. S2 uses the all-history summary
 and complete days from its forecast window; S3 uses matched grid intervals. These
-are direct Python calls, not HTTP requests between subsystems. Dashboard work,
-batteries, independent parallel meter coverage and historical tariff/installation
+are direct Python calls, not HTTP requests between subsystems. Dashboard management
+is documented separately; batteries, independent parallel meter coverage and historical tariff/installation
 policies are not implemented by these calculations.
