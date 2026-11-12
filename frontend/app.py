@@ -59,7 +59,7 @@ if show(err) or not results(buildings):
 options = {b["name"]: b["id"] for b in results(buildings)}
 building_id = options[st.sidebar.selectbox("Building", list(options))]
 page = st.sidebar.radio("Page", ["Overview", "Costs", "Scenarios", "Alerts", "Reports",
-                                 "Forecast (S2)", "Recommendations (S2)"])
+                                 "Forecast", "Recommendations"])
 if st.sidebar.button("Refresh"):
     st.rerun()
 st.sidebar.caption(f"API: {API}")
