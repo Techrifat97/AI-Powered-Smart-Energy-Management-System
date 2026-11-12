@@ -7,7 +7,7 @@ and fit PostgreSQL's identifier limit. It must name disposable data only. Do not
 reuse a database belonging to another running test session.
 
 Commands below use Bash/zsh from the repository root. No external AI calls are
-needed: Compose sets an empty API key, and AI-dependent tests use mocks or the
+needed: pass `--env OPENAI_API_KEY=` to one-off Compose tests; AI-dependent tests use mocks or the
 rule-based provider. Test execution does not establish live OpenAI reliability.
 
 ## Docker image tests
@@ -18,7 +18,7 @@ database and backend already running:
 ```sh
 dc exec backend python backend/manage.py check --database default
 dc exec backend python backend/manage.py makemigrations --check --dry-run
-dc exec backend python backend/manage.py test config monitoring coach analysis --noinput
+dc exec -e OPENAI_API_KEY= backend python backend/manage.py test config monitoring coach analysis --noinput
 git diff --check
 ```
 
@@ -80,6 +80,51 @@ Timing-sensitive tests use controlled clocks rather than minute-long waits.
 
 Passing tests do not demonstrate calibrated forecast accuracy, measured savings,
 realistic weather/building behavior, performance under load or secure public
-access. The dashboard, current UML and presentation deliverables are not covered
-by the backend tests. Migration tests operate on disposable schemas; they are not
+access. Dashboard interactions have separate Streamlit AppTest tests; UML and
+presentation appearance are not covered by the backend tests. Migration tests operate on disposable schemas; they are not
 an audit or repair of the running application's legacy data.
+
+
+## New S1 and dashboard coverage
+
+`monitoring.test_bootstrap_profiles` checks ABCs, strategies, immutable energy
+addition, deterministic streaming, complete demo days, repeat/renamed bootstrap,
+refresh preservation and real S2/S3 availability with OpenAI disabled.
+`monitoring.test_kafka_pipeline` uses PostgreSQL with mocked broker I/O to check
+strict schemas, acknowledgment failures, atomic inserts, conflicting/partial
+batches, inventory changes, DLQ/offset policy and two concurrent consumers.
+`analysis.test_scenario_periods` checks paired inclusive dates, gaps, solar alignment,
+legacy no-date behavior and identical baseline/scenario time scopes.
+
+Run Streamlit interaction tests using the same built image and a read-only mount:
+
+```sh
+dc run --rm --no-deps -T --volume "$PWD/frontend:/app/frontend:ro" \
+  --env OPENAI_API_KEY= backend python -m unittest discover -s frontend -p 'test_*.py'
+```
+
+## Fresh real-broker acceptance
+
+Use a **new project name/volumes and port**, never your working demo database.
+The acceptance script creates labeled inventory, forecasts, recommendations and a
+report in this isolated environment, deletes nothing, and waits for real Kafka
+minute cycles (up to about six minutes). It requires Python 3 standard library only.
+
+```sh
+OPENAI_API_KEY= DOCKER_BACKEND_PORT=18000 docker compose --env-file .env.docker \
+  -p smart-energy-acceptance up -d --build
+python3 scripts/verify_demo.py --isolated-api http://127.0.0.1:18000/api
+# Verify normal stop/start preserves records and bootstrap remains idempotent:
+DOCKER_BACKEND_PORT=18000 docker compose --env-file .env.docker -p smart-energy-acceptance stop
+OPENAI_API_KEY= DOCKER_BACKEND_PORT=18000 docker compose --env-file .env.docker -p smart-energy-acceptance up -d
+DOCKER_BACKEND_PORT=18000 docker compose --env-file .env.docker -p smart-energy-acceptance ps -a
+# Release containers/network afterward, retaining data volumes:
+DOCKER_BACKEND_PORT=18000 docker compose --env-file .env.docker -p smart-energy-acceptance down
+```
+
+The script deliberately accepts only localhost port 18000; ensure it belongs to the
+isolated stack. Do not repoint it to an active demonstration database. A later run
+on the same acceptance project preserves history and creates another labeled test
+building; it is not a clean first-run check unless the project was initially fresh.
+Broker-failure tests in the automated suite are mocked; normal broker startup,
+transport and restart are also exercised by the real acceptance workflow.

@@ -14,6 +14,8 @@ class Command(BaseCommand):
     help = 'Generate SYNTHETIC 60-second telemetry (not physical measurements); no downtime backfill.'
 
     def add_arguments(self, parser):
+        parser.add_argument('--mode', choices=['direct', 'kafka'], default='direct',
+                            help='Choose exactly one pipeline. Compose explicitly uses kafka.')
         parser.add_argument('--once', action='store_true', help='Process the latest completed minute and exit.')
 
     def handle(self, *args, **options):
@@ -24,12 +26,22 @@ class Command(BaseCommand):
         previous = signal.signal(signal.SIGTERM, stop)
         self.stdout.write('SYNTHETIC telemetry: UTC minute intervals; no downtime backfill.')
         last_minute = None
+        producer = None
+        if options['mode'] == 'kafka':
+            from monitoring.services.kafka_pipeline import make_producer
+            producer = make_producer()
         try:
             while True:
                 now = timezone.now()
                 minute = latest_completed_minute(now)
                 if last_minute is None or minute > last_minute:
-                    report = generate_minute(minute, now=now)
+                    if options['mode'] == 'kafka':
+                        from monitoring.services.kafka_pipeline import publish_pending
+                        report = generate_minute(minute, now=now, outbox=True)
+                        count = publish_pending(producer)
+                        self.stdout.write(f'Kafka acknowledged batches={count}; created counts below are staged readings.')
+                    else:
+                        report = generate_minute(minute, now=now)
                     for building in report['buildings']:
                         text = (f"SYNTHETIC building={building['building_id']} minute={minute.isoformat()} "
                                 f"status={building['status']} created={building['created']} "

@@ -5,6 +5,13 @@ inventory and expose stored readings to the dashboard. Manual development/demo
 work uses the configured `smart_energy_db`; automated tests use a **separate
 disposable PostgreSQL database**.
 
+The Streamlit **Building Management** page uses these existing routes and creates
+metadata only, never historical measurements. **Meter Management** lists every page,
+creates meters and changes active status through backend validation. Required-meter
+deactivation needs confirmation because it pauses whole-building telemetry; history
+remains queryable. Kafka producer/consumer workers discover eligible new meters on
+future cycles; they do not require an additional registration endpoint.
+
 ## Routes for the dashboard
 
 Both `/api/` and `/api/monitoring/` prefixes work. Examples use `/api/`.

@@ -10,13 +10,14 @@ Automated tests alone use a separate disposable PostgreSQL test database.
 
 At 12:01 UTC, the worker processes `[12:00, 12:01)` and stores start `12:00:00`,
 duration `60`. It queries the current database inventory, validates it, plans the
-whole building's values, and sends each reading through `ingest_reading()`.
+whole building's values, freezes an outbox batch and publishes it to Kafka. The
+consumer atomically sends each member through `ingest_reading()`.
 For example, a synthetic 12 kW main load corresponds to `12/60 = 0.2 kWh`.
 HVAC gets at most 30% and lighting at most 15% of that main load, shared among
 eligible active meters in each category. These are included loads, not extra
 whole-building consumption. Solar generation is recorded separately.
 
-`monitoring.services.generator.generate_minute(minute, *, now=None)` processes
+`monitoring.services.generator.generate_minute(minute, *, now=None, outbox=False)` processes
 one supplied completed UTC minute. `now` is a trusted optional clock for tests;
 the command uses the current UTC clock. Invalid or unfinished intervals raise
 `ValidationError`. The service never creates buildings/meters or changes metadata.
@@ -75,7 +76,12 @@ does not require general measured `energy_kwh` to equal `power_kw / 60`.
 
 ## Persistence, retries and concurrency
 
-Each building-minute has its own atomic transaction. All rows are saved through
+The following describes retained **direct mode**. Compose uses the Kafka outbox
+and consumer instead; its two-stage transactions and recovery are documented in
+[Kafka delivery](kafka.md). `outbox=True` stages readings rather than saving them,
+so its created count is staged measurements, not committed EnergyReading rows.
+
+Each direct building-minute has its own atomic transaction. All rows are saved through
 validated ingestion. A validation failure on any member rolls back **new rows for
 that building-minute**, preserves existing rows and allows the next building to
 run. Unknown-duration and overlap errors from ingestion remain errors; nothing
@@ -111,7 +117,9 @@ cycle, commits wait for that outer transaction.
 
 ## Command and scheduling
 
-The `run_telemetry` management command supports continuous operation and `--once`.
+The `run_telemetry` management command supports continuous operation, `--once`,
+and explicit `--mode direct|kafka`. Its CLI default remains direct for compatibility;
+Compose explicitly selects Kafka. Never run both pipelines simultaneously.
 See [Docker operations](docker-development.md#explicit-demo-inventory) or
 [host processes](host-development.md#schema-and-processes) for environment-specific
 commands.
@@ -138,7 +146,7 @@ current building transaction rolls back while earlier completed buildings remain
 The configured development database holds simulator data; a separate simulation
 database is not required. Docker has its own PostgreSQL server/volume, independent
 of host PostgreSQL. Follow the [Docker guide](docker-development.md) for private
-configuration, startup, explicit four-meter demo initialization and logs, or
+configuration, automatic 14-day demo initialization and logs, or
 [host development](host-development.md) for the optional direct setup.
 
 Meter eligibility is based on interval start: a meter created at 12:00:30 UTC
@@ -151,3 +159,5 @@ meter deactivation/reactivation and historical retention.
 Unknown-duration history can block ingestion. No command automatically repairs
 legacy data, invents missing intervals or backfills downtime. Automated checks use
 controlled clocks and a [separate disposable test database](testing.md).
+
+The profile Strategy classes and implemented UML are explained in [S1 architecture](s1-architecture.md).

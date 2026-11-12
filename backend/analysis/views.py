@@ -102,7 +102,8 @@ class BuildingScenarioAPIView(APIView):
         tariff = TariffPlan(**data['tariff']) if 'tariff' in data else None
         return Response(run_scenario(
             building, tariff=tariff, consumption_change_pct=data['consumption_change_pct'],
-            solar_change_pct=data['solar_change_pct']), status=status.HTTP_200_OK)
+            solar_change_pct=data['solar_change_pct'],
+            period_start=data.get('period_start'), period_end=data.get('period_end')), status=status.HTTP_200_OK)
 
 
 class BuildingCostReportView(APIView):

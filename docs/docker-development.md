@@ -1,16 +1,12 @@
-# Docker: local development and university demonstrations
+# Docker: local development and university demonstration
 
-This local-only stack runs the simulator-backed project. Examples use Bash/zsh
-on macOS/Linux from the repository root. Gunicorn serves the Django JSON APIs
-with worker management and graceful termination. No frontend service is started;
-the Streamlit dashboard runs on the host (see `frontend/README.md`). [Host development](host-development.md)
-uses an independent PostgreSQL configuration.
+Run Bash/zsh commands from the repository root with Docker Desktop running.
+The stack supports Apple Silicon. Streamlit runs separately on the host.
+PostgreSQL and Kafka ports remain internal; the API binds to localhost.
 
 ## First setup
 
-Run from the repository root with Docker Desktop running. Create the **separate**
-ignored `.env.docker` with generated secrets, without printing them or replacing
-an existing file:
+Create private configuration **only if it does not already exist**:
 
 ```sh
 python3 - <<'PY'
@@ -18,26 +14,15 @@ from pathlib import Path
 import secrets
 p = Path('.env.docker')
 if p.exists():
-    print('Existing .env.docker retained.')
+    print('Existing private configuration retained.')
 else:
     text = Path('.env.docker.example').read_text()
     text = text.replace('DOCKER_SECRET_KEY=\n', 'DOCKER_SECRET_KEY=' + secrets.token_urlsafe(48) + '\n')
     text = text.replace('DOCKER_DB_PASSWORD=\n', 'DOCKER_DB_PASSWORD=' + secrets.token_urlsafe(32) + '\n')
     p.write_text(text)
     p.chmod(0o600)
-    print('Created private .env.docker.')
 PY
-```
 
-The tracked example contains empty secret placeholders and non-secret defaults.
-Do not overwrite the existing `.env`. Do not regenerate the Docker password after
-initializing the volume: PostgreSQL initialization variables create credentials
-only for an empty data directory; changing the file does not rotate an existing
-database password. Keep the private file with your local persistent database.
-
-For short commands below, define this function in each new Bash/zsh terminal:
-
-```sh
 dc() { docker compose --env-file .env.docker -p smart-energy "$@"; }
 dc config --quiet
 dc build backend
@@ -45,152 +30,144 @@ dc up -d
 dc ps -a
 ```
 
-`build backend` builds the shared image once. All three application services use
-that same image. After source/dependency changes, run `dc build backend` and
-`dc up -d` again to recreate affected services. There is no source bind mount or
-automatic reload. If host port 8000 is occupied, set `DOCKER_BACKEND_PORT=8001`
-in `.env.docker` and use localhost:8001; do not stop an unrelated server.
+Keep the existing `.env`, `.env.docker` and database password. PostgreSQL initialization
+variables do not rotate credentials in an existing volume. Never share rendered
+Compose configuration or unrestricted environment output: they can contain secrets.
+The Dockerfile copies backend code and requirements, excluding private files.
 
 ## Services and startup
 
-| Service | Role | Startup condition |
+| Service | Role | Dependency |
 | --- | --- | --- |
-| `db` | Official `postgres:18-bookworm`; own named volume | Readiness checked with `pg_isready`. |
-| `migrate` | One-shot `python backend/manage.py migrate --noinput` | Database healthy. |
-| `backend` | Gunicorn with two workers, same application image | Database healthy and migrations exit 0. |
-| `telemetry` | `python backend/manage.py run_telemetry` | Database healthy and migrations exit 0. |
+| `db` | PostgreSQL 18, persistent `postgres_data` | Healthy before migrations |
+| `migrate` | Additive Django migrations, one shot | Healthy database |
+| `demo_bootstrap` | Explicit demo-mode safe initialization, one shot | Successful migrations |
+| `kafka` | Apache Kafka 4.3.2, single-node KRaft, persistent `kafka_data` | Broker health check |
+| `kafka_init` | Idempotently create raw/dead-letter topics, one shot | Healthy broker |
+| `backend` | Gunicorn JSON API, two workers | Successful bootstrap |
+| `telemetry` | OOP producer, `run_telemetry --mode kafka` | Bootstrap and topics complete |
+| `consumer` | `consume_telemetry`, validated atomic PostgreSQL writes | Bootstrap and topics complete |
 
-`migrate` showing **Exited (0)** is expected. Backend and worker never each run
-their own migrations. No inventory creation, historical seeding, data copying or
-downtime backfill occurs at startup. Application processes run as user `app`
-(UID 10001). The worker maps SIGTERM to its clean Ctrl+C shutdown path, rolling
-back an interrupted building transaction. An init process forwards signals and
-reaps children. PostgreSQL has its normal image-managed database process user.
+All application services share the same built image. Rebuild with `dc build backend`
+and run `dc up -d` after source changes. The default tag is `smart-energy-app:kafka-oop`,
+configurable through `SMART_ENERGY_IMAGE`. No source reload is enabled.
+One-shot jobs showing **Exited (0)** are successful. Workers restart on failure;
+inspect repeated failures rather than assuming running means data is arriving.
 
-Application services have no automatic restart loop: startup/worker errors remain
-visible in status and logs. Correct the error, then use `dc up -d`. Database
-readiness is checked before migration execution. A database readiness failure or unsuccessful migration prevents dependent
-startup. The backend healthcheck reads the
-building API and therefore checks both HTTP and database connectivity.
-
-Inspect without dumping secrets:
+The PostgreSQL mount remains `/var/lib/postgresql` with its existing
+`smart-energy_postgres_data` volume. Kafka uses `smart-energy_kafka_data`.
+Neither is shared with host Postgres.app. Do not delete/recreate existing volumes.
+Backend health checks exercise the building API and database, not Kafka freshness.
 
 ```sh
-dc ps -a
-dc logs --tail 50 migrate backend telemetry
-dc logs --tail 30 db
+dc logs --tail 30 migrate demo_bootstrap kafka_init
+dc logs --tail 30 telemetry consumer
 curl -fsS http://127.0.0.1:8000/api/buildings/
 ```
 
-## Environment and database isolation
+## Automatic synthetic history
 
-- `--env-file .env.docker` explicitly supplies **Compose interpolation** values.
-  `environment:` in `compose.yaml` explicitly supplies the actual container
-  variables. There is no automatic container `env_file` loading or host `.env`
-  mount. Required private values fail clearly when missing.
-- `DOCKER_*` variable names avoid accidental reuse of local `DB_HOST`, `DB_NAME`
-  or `SECRET_KEY`. Shell `DOCKER_*` variables still override the file; avoid old
-  overrides. Do not use bare `docker compose up` and expect this file to load.
-- Application containers always receive `DB_HOST=db` and `DB_PORT=5432`. The
-  backend and worker share that Docker database. `OPENAI_API_KEY` is explicitly
-  empty, so external AI calls remain disabled.
-- PostgreSQL has **no published host port**. It does not compete with Postgres.app
-  on host port 5432. The backend alone publishes `127.0.0.1:8000` by default.
-- The volume is `smart-energy_postgres_data`, mounted at `/var/lib/postgresql`.
-  PostgreSQL 18 stores data below `/var/lib/postgresql/18/docker`. This is the
-  [official 18+ image layout](https://hub.docker.com/_/postgres), not the older
-  `/var/lib/postgresql/data` mount. Keep the major version explicit; a future major
-  upgrade requires a planned data migration, not merely a tag edit.
-- Docker's database may also be named `smart_energy_db`, but it is on a different
-  server and starts empty. No Postgres.app files or data are copied/mounted.
-- `.dockerignore` excludes env files, keys, virtual environments, caches, dumps
-  and Git history. The Dockerfile copies only requirements and backend code.
-  Secrets are supplied at runtime, never as build arguments or image files.
+`DEMO_MODE=true` is the Compose default. Set `DEMO_MODE=false` for a non-demo
+installation: bootstrap then creates no buildings, meters, tariff or history.
+The simulator itself remains synthetic in either mode; stop workers if no synthetic
+live measurements are wanted.
 
-Use `dc config --quiet` for validation. **Do not share full `compose config`,
-`config --environment` or unrestricted container-inspect output**: rendered
-environment values can contain secrets. Docker access on the local machine is
-trusted. The official PostgreSQL initializer creates the configured local role
-with superuser privileges, allowing disposable test database creation; this is a
-development convenience, not a production role design.
+A fresh demo receives four dedicated reserved-device meters (ELECTRICITY, HVAC,
+LIGHTING, SOLAR), 14 previous complete UTC days with 3600-second intervals, matching
+main/solar timestamps and night solar zeros. A flat EUR 0.30/kWh tariff with EUR
+0.08/kWh export credit is created on first initialization if no active tariff exists.
+Existing tariff records and rates are preserved. Later restarts do not reactivate
+a tariff the user has deactivated; multiple active tariffs are reported without repair.
 
-References: [Compose interpolation](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/),
-[dependency conditions](https://docs.docker.com/reference/compose-file/services/#depends_on),
-[Gunicorn deployment](https://gunicorn.org/deploy/).
+`DemoDataset.key=capstone-demo-v1` records stable identity. Before that marker exists,
+the four reserved `DOCKER-DEMO-*` device IDs recognize renamed inventory. Names are
+never reset. Repeated bootstrap leaves records unchanged, including user meter status,
+forecasts and recommendations. Existing dedicated readings without a marker are
+adopted **without backfill**. Conflicting device IDs/inventory are reported and skipped;
+backend startup continues, while invalid telemetry inventory remains paused.
 
-## Explicit demo inventory
+Normal Building Management never calls bootstrap. New user buildings have no history.
+`setup_demo_inventory` remains an optional **inventory-only** command; the older
+`seed_demo_data` is a historical manual fixture, not the startup path. Do not run it
+against the current demo as a repair tool.
+
+For a long-lived dedicated demo, explicitly refresh only completely empty recent days:
 
 ```sh
-dc exec backend python backend/manage.py setup_demo_inventory
+dc exec backend python backend/manage.py bootstrap_demo --refresh
 ```
 
-This creates `Docker demo` with declared solar installation and four active kWh
-meters: main, HVAC, lighting, solar. Repeating it verifies the same inventory and
-preserves existing IDs, readings, timestamps and status. Partial/ambiguous or
-incompatible inventory, inactive required demo devices and reserved device IDs
-assigned elsewhere produce an error; nothing is silently overwritten. Run setup
-serially. The command is never called by Compose startup.
+This requires demo mode. It fills wholly empty days among the previous 14 UTC days,
+never days containing any building reading or crossing/unknown coverage. Partial days
+are reported and skipped, never repaired or overwritten. Existing user changes can
+make inventory incompatible; review the error instead of resetting it. Refresh is
+not scheduled, and cannot guarantee 14 usable days if partial live days already exist.
 
-Meters must exist at the **start** of the completed interval. If created at
-12:00:30 UTC, their first eligible interval is 12:01–12:02, processed at 12:02.
-Wait two UTC minute boundaries after creation, then inspect:
+## Dashboard and demonstration
 
 ```sh
-dc logs --tail 10 telemetry
-curl -fsS http://127.0.0.1:8000/api/buildings/
-# Replace 1 with the printed building ID if different.
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r frontend/requirements.txt
+streamlit run frontend/app.py
+```
+
+Open the printed Streamlit URL, normally http://localhost:8501. Its API default is
+http://127.0.0.1:8000/api; override with `SMART_ENERGY_API` for a different port.
+No key is required for rule-based recommendations. `OPENAI_API_KEY` is optional in
+Compose; leave it unset for demonstrations that must not call external services.
+
+1. Select the dedicated demo building and inspect Overview.
+2. Open Forecast for seven daily heuristic values.
+3. Generate Recommendations and expand Sustainability Assessment.
+4. Open Costs; select previous complete UTC dates on Reports and Scenarios.
+5. Open Building Management, create a building with explicit solar status.
+6. Open Meter Management, add a main meter and activate it; add/activate solar if installed.
+7. Wait for two UTC minute boundaries. A meter created at 12:00:30 first qualifies
+   for 12:01–12:02. Inspect Kafka logs and the reading API.
+8. Deactivate a submeter. Main telemetry continues; old readings remain. Deactivating
+   a required main/solar pauses the building and requires UI confirmation.
+
+## Verify Kafka and stored data
+
+```sh
+dc exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic energy.readings.raw
+dc exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic energy.readings.raw --from-beginning --max-messages 1 --timeout-ms 10000
+# Replace 1 with the demo building ID.
 curl -fsS 'http://127.0.0.1:8000/api/buildings/1/readings/?page_size=8'
 curl -fsS http://127.0.0.1:8000/api/buildings/1/summary/
 ```
 
-For manual `--once` retries, first stop this stack's continuous worker, then run
-the command twice within the same UTC wall-clock minute:
+Messages are versioned building-minute batches containing individual measurements.
+Kafka ordering uses building ID keys; all meters in that building share a partition.
+See [delivery and recovery](kafka.md), [OOP UML](s1-architecture.md) and [tests](testing.md).
+
+## Select exactly one pipeline
+
+Compose runs Kafka only. The old direct mode remains for explicit host/debug use.
+Do **not** launch it alongside the Kafka workers. To temporarily use direct mode:
 
 ```sh
-dc stop telemetry
-dc exec backend python backend/manage.py run_telemetry --once
-dc exec backend python backend/manage.py run_telemetry --once
-dc up -d telemetry
+dc stop telemetry consumer
+dc exec backend python backend/manage.py run_telemetry --mode direct
+# Ctrl+C the direct command before resuming Kafka:
+dc up -d telemetry consumer
 ```
 
-Depending on the worker's last cycle, the first command creates or reuses a set;
-the second reports four existing rows. Crossing a minute boundary selects a new
-interval. No duplicate keys are created. Do not retry an old completed set after
-changing its eligible inventory. The controlled-clock test suite checks exact
-retry behavior without depending on manual timing.
+Pending older Kafka batches may then conflict with direct-mode history and go to the
+DLQ. Avoid mode changes during normal demonstrations; they are not a repair workflow.
 
-## Tests and checks
-
-The [testing guide](testing.md) is the reference for Docker image tests,
-read-only working-tree tests and optional host tests. It defines disposable
-PostgreSQL database requirements and how external AI calls are disabled. Test
-execution does not require stopping the application worker because its database
-is separate. Code changes are not visible in an already-built image unless the
-working-tree mount described in that guide is used.
-
-## Stop, recreate and return to host development
+## Restart and persistence
 
 ```sh
-dc stop             # Stop this stack; keep containers and data.
-dc up -d            # Start with dependency checks and the migration job.
-dc down             # Remove only this project's containers/network; keep volume.
-dc up -d            # Recreate using the SAME persistent volume.
+dc stop
+dc up -d
+dc down             # Retains both named volumes; NEVER add -v.
+dc up -d
 ```
 
-Do **not** add `--volumes`/`-v` to routine shutdown: that option deletes database
-storage. The named volume is retained across ordinary container recreation. Back up data
-before planned storage or database-version changes.
-
-To use Postgres.app again, run `dc down`, activate `.venv`, and use the unchanged
-local `.env` with normal `python backend/manage.py ...` commands. There are no
-Docker database exports to unset in this workflow. Docker data stays in its own
-volume and is available on the next `dc up -d`.
-
-## Operational limitations
-
-Management permissions remain `AllowAny`, CORS remains permissive, and there is
-no HTTPS or per-user access control. Localhost publishing does not make this a
-public production deployment. Gunicorn serves JSON APIs; static assets for admin
-and the browsable API are not configured. Streamlit UI, backups/restore workflow,
-deployment hardening and full dependency locking remain future work. Existing
-measurement/legacy-data limits still apply; Docker does not repair old records.
+Do not flush the database or replace volumes. Restart resumes unprocessed outbox
+batches and committed Kafka offsets; duplicate deliveries are safe. Downtime gaps
+are not automatically filled. A single Kafka node is a university demo, not a
+high-availability cluster. There is no authentication, TLS or public deployment
+hardening; do not publish this stack to the internet.

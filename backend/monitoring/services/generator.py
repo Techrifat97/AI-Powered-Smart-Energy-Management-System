@@ -1,7 +1,6 @@
 """Deterministic SYNTHETIC telemetry; these are not physical measurements."""
 
 from datetime import datetime, timedelta
-from hashlib import sha256
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -29,36 +28,21 @@ def _result(building_id, status, reason='', *, created=0, already_existing=0, sk
 
 
 def _plan(building, meters, minute):
-    """Integer-watt profile v1; category budgets bound combined submeter load."""
-    fingerprint = ','.join(f'{m.pk}:{m.meter_type}:{m.device_id}' for m in meters)
-    seed = f's1-synthetic-v1|{building.pk}|{minute.isoformat()}|{fingerprint}'
-    variation = int.from_bytes(sha256(seed.encode()).digest()[:4], 'big') % 1000
-    daytime = 8 <= minute.hour < 18
-    base_watts = (8000 if minute.weekday() >= 5 else 12000) if daytime else 4000
-    main_watts = base_watts + variation
-    counts = {kind: sum(m.meter_type == kind for m in meters) for kind in ('HVAC', 'LIGHTING')}
-    solar_watts = 10000 * max(0, 360 - abs(minute.hour * 60 + minute.minute - 720)) // 360
-    plan = []
-    for meter in meters:
-        if meter.meter_type == 'ELECTRICITY':
-            watts = main_watts
-        elif meter.meter_type == 'HVAC':
-            watts = (main_watts * 30 // 100) // counts['HVAC']
-        elif meter.meter_type == 'LIGHTING':
-            watts = (main_watts * 15 // 100) // counts['LIGHTING']
-        else:  # Inventory is already validated: this is the single SOLAR meter.
-            watts = solar_watts
-        power = watts / 1000
-        plan.append(dict(meter=meter, timestamp=minute, interval_seconds=60,
-                         energy_kwh=power / 60, power_kw=power, voltage=230.0))
-    return plan
+    """Stream the original v1 measurements through composed profile strategies."""
+    from monitoring.services.profiles import TelemetryGenerator
+    return TelemetryGenerator().iter_readings(building, meters, minute)
 
 
-def _building_minute(building_id, minute):
+def _building_minute(building_id, minute, *, outbox=False):
     with transaction.atomic():
         # Building first, then all current meters by ascending PK. The building
         # UPDATE lock also blocks normal FK-checked meter creation until commit.
         building = Building.objects.select_for_update().get(pk=building_id)
+        if outbox:
+            from monitoring.models import TelemetryBatch
+            frozen = TelemetryBatch.objects.filter(building=building, timestamp=minute).first()
+            if frozen:
+                return _result(building_id, 'already_existing', 'durable_batch_already_staged')
         meters = list(Meter.objects.select_for_update(no_key=True).filter(
             building=building).order_by('pk'))
         active = [m for m in meters if m.is_active]
@@ -92,6 +76,11 @@ def _building_minute(building_id, minute):
             meter__building=building, timestamp=minute).values_list('meter_id', flat=True))
         if existing_ids and existing_ids != {m.pk for m in eligible}:
             raise ValidationError('Existing building-minute has a partial or changed meter set; no rows were changed.')
+        if outbox:
+            from monitoring.services.kafka_pipeline import stage_batch
+            batch, inserted = stage_batch(building, minute, plan)
+            return _result(building_id, 'created' if inserted else 'already_existing',
+                           'durable_batch_staged', created=len(batch.payload['readings']) if inserted else 0)
         created = already_existing = 0
         for values in plan:
             _, inserted = ingest_reading(**values)
@@ -101,7 +90,7 @@ def _building_minute(building_id, minute):
                        created=created, already_existing=already_existing, skipped_meter_ids=skipped_ids)
 
 
-def generate_minute(minute, *, now=None):
+def generate_minute(minute, *, now=None, outbox=False):
     """Process one completed UTC minute against the current database inventory.
 
     Return {minute, created, already_existing, skipped, failed, buildings}.
@@ -118,7 +107,7 @@ def generate_minute(minute, *, now=None):
     building_ids = list(Building.objects.order_by('pk').values_list('pk', flat=True))
     for building_id in building_ids:
         try:
-            outcome = _building_minute(building_id, minute)
+            outcome = _building_minute(building_id, minute, outbox=outbox)
         except Building.DoesNotExist:
             outcome = _result(building_id, 'skipped', 'building_removed_during_cycle')
         except ValidationError as error:

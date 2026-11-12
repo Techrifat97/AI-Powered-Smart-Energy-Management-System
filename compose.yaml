@@ -1,7 +1,7 @@
 name: smart-energy
 
 x-app: &app
-  image: smart-energy-app:local
+  image: ${SMART_ENERGY_IMAGE:-smart-energy-app:kafka-oop}
   build: .
   init: true
   restart: "no"
@@ -15,7 +15,10 @@ x-app: &app
     DB_HOST: db
     DB_PORT: "5432"
     DB_TEST_NAME: ${DOCKER_TEST_DB_NAME:-test_smart_energy_docker}
-    OPENAI_API_KEY: ""
+    OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    SMART_ENERGY_DEMO: ${DEMO_MODE:-true}
+    KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    KAFKA_CONSUMER_GROUP: s1-ingestion-v1
 
 services:
   db:
@@ -43,6 +46,55 @@ services:
       db:
         condition: service_healthy
 
+  demo_bootstrap:
+    <<: *app
+    command: ["python", "backend/manage.py", "bootstrap_demo"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  kafka:
+    image: apache/kafka:4.3.2
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_MESSAGE_MAX_BYTES: 2000000
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_HEAP_OPTS: -Xmx512m -Xms256m
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server kafka:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+    stop_grace_period: 30s
+
+  kafka_init:
+    image: apache/kafka:4.3.2
+    restart: "no"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-ec"]
+    command:
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic energy.readings.raw --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic energy.readings.dead-letter --partitions 3 --replication-factor 1 --config max.message.bytes=2000000
+
   backend:
     <<: *app
     ports:
@@ -50,7 +102,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
+      demo_bootstrap:
         condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/buildings/', timeout=3).close()"]
@@ -62,13 +114,28 @@ services:
 
   telemetry:
     <<: *app
-    command: ["python", "backend/manage.py", "run_telemetry"]
+    command: ["python", "backend/manage.py", "run_telemetry", "--mode", "kafka"]
+    restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-      migrate:
+      demo_bootstrap:
+        condition: service_completed_successfully
+      kafka_init:
         condition: service_completed_successfully
     stop_grace_period: 20s
 
+  consumer:
+    <<: *app
+    command: ["python", "backend/manage.py", "consume_telemetry"]
+    restart: unless-stopped
+    depends_on:
+      demo_bootstrap:
+        condition: service_completed_successfully
+      kafka_init:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+
 volumes:
   postgres_data:
+  kafka_data:
