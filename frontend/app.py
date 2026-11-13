@@ -307,51 +307,101 @@ def team_management():
     if show(err):
         return
 
+    current_user_profile = st.session_state.get("auth_user") or {}
+    current_username = current_user_profile.get("username", "admin") if isinstance(current_user_profile, dict) else "admin"
+
     st.subheader(f"Team Members ({len(users)})")
     if users:
-        table_rows = []
+        # Table header row
+        h1, h2, h3, h4 = st.columns([3, 3, 2, 2])
+        h1.caption("**MEMBER**")
+        h2.caption("**CONTACT & JOINED**")
+        h3.caption("**ROLE**")
+        h4.caption("**ACTIONS**")
+
         for u in users:
-            table_rows.append({
-                "ID": u.get("id"),
-                "Username": u.get("username"),
-                "Email": u.get("email") or "—",
-                "Name": f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or "—",
-                "Role": "Admin / Staff" if u.get("is_staff") else "Member",
-                "Joined": str(u.get("date_joined", ""))[:10],
-            })
-        st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
+            with st.container(border=True):
+                c1, c2, c3, c4 = st.columns([3, 3, 2, 2])
+
+                full_name = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+                username_str = u.get("username", "")
+                with c1:
+                    if full_name:
+                        st.markdown(f"**{full_name}**")
+                        st.caption(f"@{username_str}")
+                    else:
+                        st.markdown(f"**@{username_str}**")
+                        st.caption(f"ID #{u.get('id')}")
+
+                with c2:
+                    email_str = u.get("email")
+                    st.markdown(email_str if email_str else "*No email*")
+                    st.caption(f"Joined {str(u.get('date_joined', ''))[:10]}")
+
+                with c3:
+                    if u.get("is_staff"):
+                        st.markdown("🛡️ **Admin**")
+                    else:
+                        st.markdown("👤 **Member**")
+
+                with c4:
+                    if username_str.lower() == "admin":
+                        st.caption("*(System Admin)*")
+                    elif username_str == current_username:
+                        st.caption("*(Current Session)*")
+                    else:
+                        confirm_key = f"pending_delete_{u['id']}"
+                        if st.session_state.get(confirm_key):
+                            st.warning("Remove member?")
+                            b1, b2 = st.columns(2)
+                            if b1.button("Yes", key=f"yes_del_{u['id']}", type="primary", use_container_width=True):
+                                _, del_err = call("DELETE", f"/accounts/users/{u['id']}/")
+                                st.session_state.pop(confirm_key, None)
+                                if not show(del_err):
+                                    st.success(f"Member '{username_str}' removed.")
+                                    st.rerun()
+                            if b2.button("No", key=f"no_del_{u['id']}", use_container_width=True):
+                                st.session_state.pop(confirm_key, None)
+                                st.rerun()
+                        else:
+                            if st.button("Delete", key=f"del_user_{u['id']}", use_container_width=True):
+                                st.session_state[confirm_key] = True
+                                st.rerun()
     else:
         st.info("No team members found.")
 
-    st.subheader("Add a Member")
-    with st.form("add_member_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            new_u = st.text_input("Username *", key="team_member_username")
-            new_e = st.text_input("Email", key="team_member_email")
-        with col2:
-            new_p = st.text_input("Temporary Password *", type="password", key="team_member_password")
-            new_fn = st.text_input("First Name", key="team_member_fn")
+    st.divider()
 
-        st.caption("Enter a temporary password for the member to log in.")
-        submit_btn = st.form_submit_button("Add Member")
+    with st.container(border=True):
+        st.subheader("Add a Member")
+        with st.form("add_member_form"):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_u = st.text_input("Username *", key="team_member_username")
+                new_e = st.text_input("Email", key="team_member_email")
+            with col2:
+                new_p = st.text_input("Temporary Password *", type="password", key="team_member_password")
+                new_fn = st.text_input("First Name", key="team_member_fn")
 
-        if submit_btn:
-            u_clean = new_u.strip()
-            p_clean = new_p.strip()
-            if not u_clean or not p_clean:
-                st.error("Username and temporary password are required.")
-            else:
-                payload = {
-                    "username": u_clean,
-                    "password": p_clean,
-                    "email": new_e.strip(),
-                    "first_name": new_fn.strip(),
-                }
-                _, err = call("POST", "/accounts/users/", json=payload)
-                if not show(err):
-                    st.success(f"Team member '{u_clean}' added successfully!")
-                    st.rerun()
+            st.caption("Enter a temporary password for the member to log in.")
+            submit_btn = st.form_submit_button("Add Member", type="primary")
+
+            if submit_btn:
+                u_clean = new_u.strip()
+                p_clean = new_p.strip()
+                if not u_clean or not p_clean:
+                    st.error("Username and temporary password are required.")
+                else:
+                    payload = {
+                        "username": u_clean,
+                        "password": p_clean,
+                        "email": new_e.strip(),
+                        "first_name": new_fn.strip(),
+                    }
+                    _, err = call("POST", "/accounts/users/", json=payload)
+                    if not show(err):
+                        st.success(f"Team member '{u_clean}' added successfully!")
+                        st.rerun()
 
 
 def costs():

@@ -128,7 +128,7 @@ subsystems' routes. The table uses the shared `/api/` convenience prefix. All do
 | --- | --- | --- | --- |
 | Core | `/api/health/` | GET | Public container health probe (`AllowAny`) |
 | Auth | `/api/auth/token/` | POST | Obtain 24-hour SimpleJWT access/refresh tokens |
-| Accounts | `/api/accounts/users/` | GET, POST | List registered users or create a new user account |
+| Accounts | `/api/accounts/users/`, `/api/accounts/users/{id}/` | GET, POST; GET, DELETE | List, create, or remove user accounts |
 | Accounts | `/api/accounts/me/` | GET | Retrieve authenticated profile |
 | S1 | `/api/buildings/` | GET, POST | List/create buildings |
 | S1 | `/api/buildings/{id}/` | GET, PUT, PATCH | Retrieve/update building details |

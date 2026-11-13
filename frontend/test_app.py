@@ -11,6 +11,7 @@ class DashboardTests(TestCase):
     def setUp(self):
         self.buildings=[]
         self.meters=[]
+        self.users=[{'id':1,'username':'admin','email':'admin@test.com','is_staff':True,'date_joined':'2026-01-01'}]
         self.posts=[]
         self.fail=False
         self.mock=patch('requests.request',side_effect=self.request)
@@ -34,12 +35,17 @@ class DashboardTests(TestCase):
         elif method=='PATCH':
             self.posts.append((url,kwargs['json']));data={}
             self.meters[0].update(kwargs['json'])
+        elif method=='DELETE':
+            self.posts.append((url,{}))
+            response.status_code=204
+            response.json.side_effect=ValueError("No JSON")
+            return response
         elif url.endswith('/buildings/'):
             data={'results':self.buildings,'next':None}
         elif url.endswith('/meters/'):
             data={'results':self.meters,'next':None}
         elif url.endswith('/accounts/users/'):
-            data={'results':[{'id':1,'username':'admin','email':'admin@test.com','is_staff':True,'date_joined':'2026-01-01'}],'next':None}
+            data={'results':self.users,'next':None}
         elif url.endswith('/summary/'):
             data={'total_consumption_kwh':None,'total_solar_generated_kwh':None,'peak_demand_kw':None,
                   'total_readings_count':0,'main_data_available':False,'main_data_reason':'no_readings',
@@ -130,7 +136,6 @@ class DashboardTests(TestCase):
     def test_team_management_lists_members_and_adds_member(self):
         app=self.app('Team Management')
         self.assertFalse(app.exception)
-        self.assertTrue(len(app.dataframe)>=1)
         app.text_input[0].set_value('prof_evaluator')
         app.text_input[1].set_value('prof@fh.de')
         app.text_input[2].set_value('temp_pass_123')
@@ -139,3 +144,17 @@ class DashboardTests(TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(self.posts[-1][1]['username'],'prof_evaluator')
         self.assertEqual(self.posts[-1][1]['password'],'temp_pass_123')
+
+    def test_team_management_deletes_member_with_confirmation(self):
+        self.users.append({'id':2,'username':'colleague','email':'c@test.com','is_staff':False,'date_joined':'2026-01-01'})
+        app=self.app('Team Management')
+        app.session_state['auth_user']={'username':'admin'}
+        app.run()
+        self.assertFalse(app.exception)
+        del_btn = next(b for b in app.button if b.label=='Delete')
+        del_btn.click().run()
+        self.assertFalse(app.exception)
+        yes_btn = next(b for b in app.button if b.label=='Yes')
+        yes_btn.click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('/accounts/users/2/' in p[0] for p in self.posts))

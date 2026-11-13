@@ -117,3 +117,38 @@ class AccountsApiTests(APITestCase):
 
         feedback = RecommendationFeedback.objects.get(pk=response.data['id'])
         self.assertEqual(feedback.user, self.admin_user)
+
+    def test_authenticated_user_can_delete_another_user(self):
+        target = User.objects.create_user('deleteme', 'd@test.com', 'pass123')
+        detail_url = reverse('user-detail', kwargs={'pk': target.pk})
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(pk=target.pk).exists())
+
+    def test_authenticated_user_cannot_delete_themselves(self):
+        detail_url = reverse('user-detail', kwargs={'pk': self.admin_user.pk})
+        self.client.force_authenticate(user=self.admin_user)
+
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(User.objects.filter(pk=self.admin_user.pk).exists())
+
+    def test_admin_account_cannot_be_deleted(self):
+        other_user = User.objects.create_user('manager', 'm@test.com', 'pass123')
+        detail_url = reverse('user-detail', kwargs={'pk': self.admin_user.pk})
+        self.client.force_authenticate(user=other_user)
+
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('primary admin account cannot be removed', response.data['detail'])
+        self.assertTrue(User.objects.filter(pk=self.admin_user.pk).exists())
+
+    def test_unauthenticated_user_cannot_delete_user(self):
+        target = User.objects.create_user('deleteme2', 'd2@test.com', 'pass123')
+        detail_url = reverse('user-detail', kwargs={'pk': target.pk})
+
+        response = self.client.delete(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(User.objects.filter(pk=target.pk).exists())
