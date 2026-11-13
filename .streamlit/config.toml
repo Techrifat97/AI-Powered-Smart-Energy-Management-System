@@ -1,0 +1,18 @@
+[theme]
+base = "light"
+primaryColor = "#0B8F6B"
+backgroundColor = "#F5FAF7"
+secondaryBackgroundColor = "#E4F2EA"
+textColor = "#12332B"
+linkColor = "#0B6E8F"
+borderColor = "#CFE6DA"
+baseRadius = "large"
+showWidgetBorder = true
+chartCategoricalColors = ["#0B8F6B", "#F5A800", "#2F6FB5", "#E0603A", "#7A5CC2", "#4CC48B"]
+
+[theme.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#E4F2EA"
+
+[client]
+toolbarMode = "minimal"

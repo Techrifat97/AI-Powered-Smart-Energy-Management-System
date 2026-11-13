@@ -13,6 +13,7 @@ RUN python -m pip install --no-cache-dir -r requirements.txt \
 # Deliberately copy application code only, never the whole working tree.
 COPY --chown=app:app backend ./backend
 COPY --chown=app:app frontend ./frontend
+COPY --chown=app:app .streamlit ./.streamlit
 USER app
 EXPOSE 8000 8501
 CMD ["gunicorn", "--chdir", "backend", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--access-logfile", "-", "--error-logfile", "-", "--graceful-timeout", "20", "--timeout", "60"]
