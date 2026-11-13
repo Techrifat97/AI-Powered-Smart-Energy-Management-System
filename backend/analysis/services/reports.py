@@ -3,12 +3,7 @@ from datetime import datetime, time, timedelta, timezone
 
 from analysis.models import CostReport, TariffPlan
 from .costs import cost_analysis
-
-
-class ReportUnavailable(Exception):
-    def __init__(self, reason):
-        super().__init__(reason)
-        self.reason = reason
+from .errors import ReportUnavailable  # noqa: F401  (re-exported for callers)
 
 
 def generate_cost_report(building, period_start, period_end):

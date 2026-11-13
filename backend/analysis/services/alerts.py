@@ -3,10 +3,17 @@
 Simple, explainable thresholds, not a statistical anomaly model. Detection is
 conservative: with too little data a rule stays silent. An unresolved alert of
 the same type for the same building/meter is never duplicated.
-"""
-from datetime import timedelta
-from math import fsum
 
+Design: every rule is a subclass of the abstract `AlertRule`. An `AlertDetector`
+is composed of rules and treats them polymorphically, so a new rule is one new
+class and one entry in `default_rules()`.
+"""
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import timedelta
+
+import numpy as np
+import pandas as pd
 from django.utils import timezone
 
 from analysis.models import EnergyAlert
@@ -21,84 +28,145 @@ NIGHT_LOAD_FACTOR = 0.5          # night mean power vs mean power of the other h
 OFFLINE_AFTER = timedelta(minutes=15)
 
 
-def _mean(values):
-    return fsum(values) / len(values)
+@dataclass(frozen=True)
+class Finding:
+    """What a rule reports when its condition is met."""
+    severity: str
+    message: str
+    value: float
+    threshold: float
 
 
-def _main_series(meter, now):
-    rows = EnergyReading.objects.filter(meter=meter, timestamp__lte=now, timestamp__gt=now - WINDOW)
-    return list(rows.order_by('timestamp').values_list('timestamp', 'power_kw'))
+class AlertRule(ABC):
+    """A single detection rule. Subclasses implement `evaluate`."""
+
+    alert_type: str = ''
+    per_meter: bool = True       # False: evaluated once per building (meter is None)
+
+    def applies_to(self, meter):
+        return True
+
+    @abstractmethod
+    def evaluate(self, building, meter, now):
+        """Return a Finding, or None when the rule is not triggered."""
 
 
-def _peak_spike(meter, now):
-    series = _main_series(meter, now)
-    if len(series) <= MIN_SAMPLES:
+class PowerSeriesRule(AlertRule, ABC):
+    """Shared base for rules that analyse the last 24 h of a meter's power."""
+
+    def applies_to(self, meter):
+        return meter.meter_type == 'ELECTRICITY'
+
+    @staticmethod
+    def power_series(meter, now):
+        rows = list(EnergyReading.objects.filter(
+            meter=meter, timestamp__lte=now, timestamp__gt=now - WINDOW,
+        ).order_by('timestamp').values_list('timestamp', 'power_kw'))
+        times = [t for t, _ in rows]
+        power = [p for _, p in rows]
+        return pd.Series(power, index=pd.DatetimeIndex(times, tz='UTC'), dtype='float64')
+
+
+class PeakSpikeRule(PowerSeriesRule):
+    alert_type = 'PEAK_SPIKE'
+
+    def evaluate(self, building, meter, now):
+        series = self.power_series(meter, now)
+        if len(series) <= MIN_SAMPLES:
+            return None
+        latest = float(series.iloc[-1])
+        average = float(np.mean(series.iloc[:-1]))
+        threshold = average * PEAK_SPIKE_FACTOR
+        if average > 0 and latest > threshold:
+            return Finding('WARNING', f'Power of {latest:.2f} kW is above {PEAK_SPIKE_FACTOR:g}x the 24 h '
+                           f'average of {average:.2f} kW.', latest, threshold)
         return None
-    *earlier, (_, latest) = series
-    average = _mean([p for _, p in earlier])
-    threshold = average * PEAK_SPIKE_FACTOR
-    if average > 0 and latest > threshold:
-        return ('WARNING', f'Power of {latest:.2f} kW is above {PEAK_SPIKE_FACTOR:g}x the 24 h '
-                f'average of {average:.2f} kW.', latest, threshold)
 
 
-def _night_load(meter, now):
-    series = _main_series(meter, now)
-    night = [p for t, p in series if t.hour in NIGHT_HOURS_UTC]
-    day = [p for t, p in series if t.hour not in NIGHT_HOURS_UTC]
-    if len(night) < MIN_SAMPLES or len(day) < MIN_SAMPLES:
+class NightLoadRule(PowerSeriesRule):
+    alert_type = 'UNUSUAL_NIGHT_LOAD'
+
+    def evaluate(self, building, meter, now):
+        series = self.power_series(meter, now)
+        is_night = series.index.hour.isin(list(NIGHT_HOURS_UTC))
+        night, day = series[is_night], series[~is_night]
+        if len(night) < MIN_SAMPLES or len(day) < MIN_SAMPLES:
+            return None
+        night_avg, threshold = float(np.mean(night)), float(np.mean(day)) * NIGHT_LOAD_FACTOR
+        if night_avg > threshold:
+            return Finding('WARNING', f'Night-time (UTC) average power of {night_avg:.2f} kW exceeds '
+                           f'{NIGHT_LOAD_FACTOR:.0%} of the daytime average.', night_avg, threshold)
         return None
-    night_avg, threshold = _mean(night), _mean(day) * NIGHT_LOAD_FACTOR
-    if night_avg > threshold:
-        return ('WARNING', f'Night-time (UTC) average power of {night_avg:.2f} kW exceeds '
-                f'{NIGHT_LOAD_FACTOR:.0%} of the daytime average.', night_avg, threshold)
 
 
-def _offline(meter, now):
-    latest = meter.readings.order_by('-timestamp').first()
-    if latest is None:
+class MeterOfflineRule(AlertRule):
+    alert_type = 'METER_OFFLINE'
+
+    def evaluate(self, building, meter, now):
+        latest = meter.readings.order_by('-timestamp').first()
+        if latest is None:
+            return None
+        last_seen = latest.timestamp + timedelta(seconds=latest.interval_seconds or 0)
+        if now - last_seen > OFFLINE_AFTER:
+            minutes = (now - last_seen).total_seconds() / 60
+            return Finding('CRITICAL', f'No reading from meter {meter.device_id} for {minutes:.0f} minutes.',
+                           minutes, OFFLINE_AFTER.total_seconds() / 60)
         return None
-    seconds = latest.interval_seconds or 0
-    last_seen = latest.timestamp + timedelta(seconds=seconds)
-    if now - last_seen > OFFLINE_AFTER:
-        minutes = (now - last_seen).total_seconds() / 60
-        return ('CRITICAL', f'No reading from meter {meter.device_id} for {minutes:.0f} minutes.',
-                minutes, OFFLINE_AFTER.total_seconds() / 60)
 
 
-def _budget(building):
-    if not building.baseline_kwh_per_day or building.baseline_kwh_per_day <= 0:
+class DailyBudgetRule(AlertRule):
+    alert_type = 'BUDGET_EXCEEDED'
+    per_meter = False
+
+    def evaluate(self, building, meter, now):
+        baseline = building.baseline_kwh_per_day
+        if not baseline or baseline <= 0:
+            return None
+        days = building_energy_report(building)['complete_days']
+        if not days:
+            return None
+        latest = days[-1]
+        if latest['gross_kwh'] > baseline:
+            return Finding('WARNING', f"Consumption of {latest['gross_kwh']:.1f} kWh on {latest['date']} "
+                           f"exceeded the daily baseline of {baseline:.1f} kWh.", latest['gross_kwh'], baseline)
         return None
-    days = building_energy_report(building)['complete_days']
-    if not days:
-        return None
-    latest = days[-1]
-    if latest['gross_kwh'] > building.baseline_kwh_per_day:
-        return ('WARNING', f"Consumption of {latest['gross_kwh']:.1f} kWh on {latest['date']} exceeded "
-                f"the daily baseline of {building.baseline_kwh_per_day:.1f} kWh.",
-                latest['gross_kwh'], building.baseline_kwh_per_day)
+
+
+def default_rules():
+    return [PeakSpikeRule(), NightLoadRule(), MeterOfflineRule(), DailyBudgetRule()]
+
+
+class AlertDetector:
+    """Runs a collection of rules over a building and stores new, non-duplicate alerts."""
+
+    def __init__(self, rules=None):
+        self.rules = list(rules) if rules is not None else default_rules()
+
+    def _findings(self, building, now):
+        for meter in Meter.objects.filter(building=building, is_active=True):
+            for rule in self.rules:
+                if rule.per_meter and rule.applies_to(meter):
+                    yield rule, meter, rule.evaluate(building, meter, now)
+        for rule in self.rules:
+            if not rule.per_meter:
+                yield rule, None, rule.evaluate(building, None, now)
+
+    def detect(self, building, now=None):
+        """Create alerts for new findings and return the created EnergyAlert rows."""
+        now = now or timezone.now()
+        created = []
+        for rule, meter, finding in self._findings(building, now):
+            if finding is None:
+                continue
+            if EnergyAlert.objects.filter(building=building, meter=meter, alert_type=rule.alert_type,
+                                          is_resolved=False).exists():
+                continue
+            created.append(EnergyAlert.objects.create(
+                building=building, meter=meter, severity=finding.severity, alert_type=rule.alert_type,
+                message=finding.message, value_recorded=finding.value, threshold_value=finding.threshold))
+        return created
 
 
 def detect_alerts(building, now=None):
-    """Create alerts for new findings and return the created EnergyAlert rows."""
-    now = now or timezone.now()
-    findings = []
-    for meter in Meter.objects.filter(building=building, is_active=True):
-        if meter.meter_type == 'ELECTRICITY':
-            findings.append(('PEAK_SPIKE', meter, _peak_spike(meter, now)))
-            findings.append(('UNUSUAL_NIGHT_LOAD', meter, _night_load(meter, now)))
-        findings.append(('METER_OFFLINE', meter, _offline(meter, now)))
-    findings.append(('BUDGET_EXCEEDED', None, _budget(building)))
-
-    created = []
-    for alert_type, meter, found in findings:
-        if found is None:
-            continue
-        if EnergyAlert.objects.filter(building=building, meter=meter, alert_type=alert_type,
-                                      is_resolved=False).exists():
-            continue
-        severity, message, value, threshold = found
-        created.append(EnergyAlert.objects.create(
-            building=building, meter=meter, severity=severity, alert_type=alert_type,
-            message=message, value_recorded=value, threshold_value=threshold))
-    return created
+    """Convenience wrapper used by the API: run the default rule set."""
+    return AlertDetector().detect(building, now)
