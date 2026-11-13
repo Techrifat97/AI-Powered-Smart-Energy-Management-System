@@ -66,10 +66,12 @@ class RecommendationFeedbackSerializer(serializers.ModelSerializer):
         queryset=AIRecommendation.objects.all(),
         required=False,
     )
+    user_username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = RecommendationFeedback
-        fields = ['id', 'recommendation', 'user', 'rating', 'is_accepted', 'comment', 'created_at']
+        fields = ['id', 'recommendation', 'user', 'user_username', 'rating', 'is_accepted', 'comment', 'created_at']
+        read_only_fields = ['user']
 
     def validate(self, attrs):
         url_recommendation = self.context.get('recommendation')

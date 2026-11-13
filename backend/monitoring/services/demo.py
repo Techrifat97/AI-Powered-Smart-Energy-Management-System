@@ -60,6 +60,7 @@ def bootstrap_demo(*, now=None, refresh=False):
     building creation never invokes this function.
     """
     _serialize_setup()
+    _ensure_demo_user()
     marker = DemoDataset.objects.select_related('building').filter(pk=DATASET_KEY).first()
     if marker:
         if refresh:
@@ -133,3 +134,21 @@ def _ensure_demo_tariff():
     TariffPlan.objects.create(name='Synthetic demo flat tariff', rate_standard_eur_per_kwh=.30,
                               rate_peak_eur_per_kwh=.30, solar_feed_in_eur_per_kwh=.08)
     return 'created_demo_tariff'
+
+
+def _ensure_demo_user():
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    user, created = User.objects.get_or_create(
+        username='admin',
+        defaults={
+            'email': 'admin@smartenergy.local',
+            'is_staff': True,
+            'is_superuser': True,
+        }
+    )
+    if created:
+        user.set_password('admin123')
+        user.save()
+        return 'created_demo_admin'
+    return 'preserved_demo_admin'
