@@ -58,16 +58,14 @@ flowchart LR
     Coach --> DB
 ```
 
-Arrows show service calls and database access. The Streamlit dashboard in `frontend/`
-calls the HTTP APIs from the host.
+Arrows show service calls and database access. The Streamlit dashboard runs inside Docker on port 8501 and communicates with the backend API.
 
 ## Repository structure
 
 ```text
 .
 ├── Dockerfile, compose.yaml, .dockerignore
-├── .env.docker.example           # Docker configuration template
-├── .env.example                  # Optional host configuration template
+├── .env.example                  # Environment configuration template
 ├── requirements.txt
 ├── backend/
 │   ├── config/                   # Settings, routes and WSGI/ASGI entry points
@@ -86,54 +84,38 @@ calls the HTTP APIs from the host.
 
 ## Docker quickstart
 
-Examples use **Bash or zsh on macOS/Linux**, from the repository root. Docker
-Desktop with Compose is required; the setup supports native Apple Silicon builds.
-Bash functions and heredocs are not PowerShell syntax.
+Works on Windows (PowerShell), macOS, and Linux from the repository root.
 
-1. Create private `.env.docker` from the tracked example using the
-   [configuration instructions](docs/docker-development.md#first-setup). Existing
-   private files must be retained; secrets are not committed.
-2. Define the helper and start the services:
+1. Create your local environment file:
 
    ```sh
-   dc() { docker compose --env-file .env.docker -p smart-energy "$@"; }
-   dc config --quiet
-   dc build backend
-   dc up -d
-   dc ps -a
+   cp .env.example .env
    ```
 
-   PostgreSQL, Kafka and backend should be healthy; `telemetry` (Kafka producer)
-   and `consumer` running. `migrate`, `demo_bootstrap` and `kafka_init` should
-   show **Exited (0)**. With `DEMO_MODE=true` (default), a fresh database gets
-   one dedicated demo building, four meters, 14 complete previous UTC days of
-   hourly synthetic data, and a demo tariff. Existing records are preserved.
-3. Start the host dashboard in a separate terminal:
+2. Build and start all services in the background:
 
    ```sh
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r frontend/requirements.txt
-   streamlit run frontend/app.py
+   docker compose up -d --build
    ```
 
-   Select the demo building. Forecast and rule-based recommendations work without
-   an OpenAI key. On Scenarios/Reports choose complete previous UTC days. User-created
-   buildings start with no invented history; add and activate their meters.
-4. Inspect the APIs, substituting the printed building ID:
+3. Verify running containers:
 
    ```sh
-   curl -fsS http://127.0.0.1:8000/api/buildings/
-   curl -fsS 'http://127.0.0.1:8000/api/buildings/1/readings/?page_size=8'
-   curl -fsS http://127.0.0.1:8000/api/buildings/1/summary/
+   docker compose ps
    ```
 
-The backend is published at `127.0.0.1:8000`; PostgreSQL has no published host
-port. Docker has its own persistent database, separate from Postgres.app or other
-host PostgreSQL installations. Ordinary `dc down` retains that volume; do not add
-`-v` for routine shutdown. See [Docker operations](docs/docker-development.md)
-for configuration, logs and restart details, or [host development](docs/host-development.md)
-for an optional non-Docker setup. A separate simulation database is not required.
+   All services (`db`, `backend`, `frontend`, `kafka`, `telemetry`, `consumer`) will show as healthy/running.
+   With `DEMO_MODE=true` (default), the database is automatically seeded with 14 complete days of historical readings.
+
+4. Open the applications:
+   - **Streamlit Dashboard**: [http://localhost:8501](http://localhost:8501)
+   - **Backend API**: [http://localhost:8000/api/](http://localhost:8000/api/)
+
+5. Stop all services:
+
+   ```sh
+   docker compose down
+   ```
 
 ## API overview
 
