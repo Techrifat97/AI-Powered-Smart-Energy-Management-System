@@ -684,6 +684,32 @@ def _tariff_editor(active, first=False):
         st.rerun()
 
 
+def _cost_explanation():
+    """Button that asks the backend (OpenAI, or built-in rules) to explain the costs in plain words."""
+    key = f"cost_explanation_{building_id}"
+    with st.container(border=True):
+        st.markdown("#### :material/auto_awesome: Explain my costs in simple words")
+        st.caption("An AI assistant reads your numbers and explains them, with tips to pay less.")
+        if st.button("Explain my costs", icon=":material/auto_awesome:", key="explain_costs"):
+            with st.spinner("Writing your explanation..."):
+                answer, err = call("POST", f"/buildings/{building_id}/cost/explain/", json={})
+            if not show(err):
+                st.session_state[key] = answer
+        answer = st.session_state.get(key)
+        if not answer:
+            return
+        if not answer.get("available"):
+            st.info(explain(answer.get("reason")), icon=":material/info:")
+            return
+        st.write(answer["text"])
+        if answer["source"] == "OPENAI":
+            st.caption(":material/smart_toy: Written by AI (OpenAI). Check important numbers above.")
+        elif answer.get("fallback_reason"):
+            st.caption(":material/rule: The AI could not be reached, so the app's built-in rules wrote this.")
+        else:
+            st.caption(":material/rule: Written by the app's built-in rules (no AI key is set up).")
+
+
 def costs():
     st.header("Costs")
     st.write("How much this building's electricity costs, worked out from its meter readings "
@@ -752,6 +778,7 @@ def costs():
         if scenarios_target is not None:
             st.page_link(scenarios_target, label="Want to pay less? Try an idea on the \"What if...?\" page",
                          icon=":material/savings:")
+        _cost_explanation()
     else:
         st.info(explain(cost.get("cost_estimates_reason", "missing_readings")),
                 title="Costs can't be calculated yet", icon=":material/info:")

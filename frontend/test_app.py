@@ -34,6 +34,9 @@ class DashboardTests(TestCase):
                 data={'access':'jwt-test-access-token','refresh':'jwt-test-refresh-token'}
             elif url.endswith('/buildings/'):
                 data=dict(id=2,meters=[],**kwargs['json']);self.buildings.append(data)
+            elif url.endswith('/cost/explain/'):
+                data={'available':True,'reason':'available','source':'RULE_BASED','fallback_reason':None,
+                      'text':'You paid about 491.48 EUR for electricity.'}
             elif url.endswith('/scenarios/'):
                 data=self.scenario_result
             elif url.endswith('/accounts/users/'):
@@ -238,6 +241,17 @@ class DashboardTests(TestCase):
         app=self.app('Costs')
         self.assertFalse(app.exception)
         self.assertTrue(any('491.48 EUR' in m.value for m in app.markdown))
+
+    def test_explain_my_costs_shows_text_and_source(self):
+        self.inventory();self.tariffs=[self.TARIFF]
+        self.cost={'cost_estimates_available':True,'estimated_net_cost_eur':491.48,'estimated_import_cost_eur':491.97,
+                   'estimated_export_credit_eur':0.49,'estimated_grid_import_kwh':1639.9,'estimated_grid_export_kwh':6.2}
+        app=self.app('Costs')
+        next(b for b in app.button if b.label=='Explain my costs').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(self.posts[-1][0].endswith('/cost/explain/'))
+        self.assertTrue(any('You paid about 491.48 EUR' in m.value for m in app.markdown))
+        self.assertTrue(any('built-in rules' in c.value for c in app.caption))
 
     def test_changing_price_switches_off_old_tariff(self):
         self.inventory();self.tariffs=[self.TARIFF];app=self.app('Costs')

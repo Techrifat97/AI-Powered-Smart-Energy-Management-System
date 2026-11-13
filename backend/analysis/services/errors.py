@@ -11,3 +11,7 @@ class ReportUnavailable(AnalysisError):
     def __init__(self, reason):
         super().__init__(reason)
         self.reason = reason
+
+
+class ExplanationUnavailable(AnalysisError):
+    """One cost explainer could not produce a text; the next explainer is tried."""
