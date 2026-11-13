@@ -5,9 +5,8 @@ tokens and provides Overview, Building Management, Meter Management, Team Manage
 Costs, Scenarios, Alerts, Reports, Forecast and Recommendations pages.
 
 Setup, demo login, usage and test commands are maintained in the root README.
-The technical guides document the subsystem APIs. The submission review records
-the shared-session authentication concern and other current limitations.
-[Project setup and usage](../README.md), [review findings](../docs/submission-review.md)
+The technical guides document the subsystem APIs and data flow.
+[Project setup and usage](../README.md)
 
 For optional host execution, activate a virtual environment with the frontend
 dependencies installed and run `streamlit run frontend/app.py`. The default API

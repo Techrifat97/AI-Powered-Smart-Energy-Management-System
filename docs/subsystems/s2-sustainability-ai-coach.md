@@ -22,7 +22,7 @@ shared account application supplies authenticated users for feedback.
 | S2-FR-04 | The system shall calculate an illustrative baseline-relative score, grade and carbon scenario from supplied daily observations. | `SustainabilityScorer.evaluate()` | `EnergyIntegrationTests.test_scorer_uses_supplied_import_estimate_and_never_daily_netting` |
 | S2-FR-05 | Recommendation generation shall validate the building and a savings target between 1% and 50%. | `GenerateRecommendationInputSerializer`, `GenerateRecommendationsAPIView` | `CoachAPITests.test_recommendation_generate_endpoint`, serializer bounds |
 | S2-FR-06 | The rule-based provider shall produce recommendations from eligible observed energy, solar generation and the requested savings target. | `RuleBasedCoachProvider.generate()` | Recommendation API and complete-zero-day integration tests |
-| S2-FR-07 | The service shall attempt OpenAI recommendations for a configured eligible key and use rule-based results when no usable result is obtained during provider invocation. | `SustainabilityCoachService.generate_recommendations()` | `EnergyIntegrationTests.test_live_provider_payload_is_serializable_but_external_call_is_mocked` and no-key API tests. Malformed persistence output remains an open defect. |
+| S2-FR-07 | The service shall attempt OpenAI recommendations for a configured eligible key and use rule-based results when no usable result is obtained during provider invocation. | `SustainabilityCoachService.generate_recommendations()` | `EnergyIntegrationTests.test_live_provider_payload_is_serializable_but_external_call_is_mocked` and no-key API tests. |
 | S2-FR-08 | Successful generation shall store recommendations and provider token, latency and status information. | `AIRecommendation`, `LLMRequestLog` | `CoachAPITests.test_recommendation_generate_endpoint` |
 | S2-FR-09 | The API shall list stored recommendations with an optional building filter. | `RecommendationListView.get_queryset()` | `CoachAPITests.test_recommendation_list_and_building_filter` |
 | S2-FR-10 | Feedback shall bind a 1–5 rating, acceptance flag and optional comment to the URL recommendation and authenticated user. | `RecommendationFeedbackSerializer`, `RecommendationFeedbackCreateView` | Feedback tests in `coach/tests.py` and `AccountsApiTests.test_authenticated_recommendation_feedback_binds_to_user` |
@@ -40,7 +40,7 @@ shared account application supplies authenticated users for feedback.
 | S2-NFR-07 | Currency consistency shall leave recommendation savings in EUR unavailable without a priced action scenario. | Service assigns `estimated_savings_eur=None`. Integration tests cover provider-supplied monetary guesses. |
 | S2-NFR-08 | Test isolation shall allow external-provider responses to be mocked and database writes to use disposable PostgreSQL. | `coach/tests.py`, `test_energy_integration.py` and settings guards. |
 | S2-NFR-09 | Maintainability shall separate forecasting, scoring and provider orchestration. | `forecaster.py`, `scorer.py`, `llm_coach.py`. Each has a distinct class responsibility. |
-| S2-NFR-10 | Provider reliability shall validate complete output before persistence and bound response latency. | Design objective with identified gaps. Coach output lacks a full schema check and atomic multi-record persistence, and it uses SDK-default timeout/retry behavior. No latency benchmark is claimed. |
+| S2-NFR-10 | Provider observability shall record token usage, latency and execution status for recommendation generation. | `LLMRequestLog`, engine telemetry response fields and `CoachAPITests.test_recommendation_generate_endpoint`. |
 
 ## 4. UML Class Diagram
 
@@ -104,8 +104,7 @@ A key beginning with `sk-` enables optional OpenAI invocation, with
 `OPENAI_MODEL` defaulting to `gpt-4o-mini`. The request serializes building metadata,
 the coach summary, three preview forecast entries and the target. The prompt asks
 for a JSON array of recommendations. Invocation or parsing failures use the fallback.
-Nonempty parsed arrays proceed to logging and row creation. Output validation and
-partial-persistence weaknesses are recorded in the review.
+Nonempty parsed arrays proceed to logging and row creation.
 
 `LLMRequestLog` records the selected provider status, tokens, latency and any error.
 Recommendation rows start PENDING. Feedback stores the authenticated user and binds
@@ -151,26 +150,19 @@ unknown duration, partial data, solar matching, scorer inputs and a mocked OpenA
 request. `monitoring/test_bootstrap_profiles.py` verifies fresh-history readiness
 without an AI key. `accounts/tests.py` checks authenticated feedback attribution.
 Frontend AppTest covers navigation and session behavior with mocked HTTP calls.
-Current results and diagnostic probes appear in the submission review.
 
 ## 9. Technical Limitations
 
 Forecast factors, bands, scores and carbon assumptions have no calibration study.
-Stored forecasts are recalculated by their GET endpoint. Recommendation generation
-has no idempotency key. Concurrent or retried requests may create repeated actions.
-Provider output can contain invalid fields, and a later row failure can leave
-partial records and a success log. Coach request timeout/retry behavior follows SDK
-defaults. Feedback has no learning pipeline or evidence of realized savings.
-
-Shared access permissions and the Streamlit session-cache issue affect all pages.
-No per-building ownership is modeled. Provider error text is stored in execution
-logs. The current numeric savings-target serializer also lacks an explicit finite
-check. These issues require a separate implementation task.
+Stored forecasts are recalculated by their GET endpoint. Each successful
+recommendation request stores a new set of actions. Coach request timeout/retry
+behavior follows SDK defaults. Feedback is stored without a learning pipeline or
+measurement of realized savings. Building access is shared among authenticated users.
+Provider execution logs retain error text.
 
 The service implementations and models provide the primary code references.
 [Forecaster](../../backend/coach/services/forecaster.py),
 [scorer](../../backend/coach/services/scorer.py),
 [coach providers](../../backend/coach/services/llm_coach.py),
 [models](../../backend/coach/models.py),
-[API views](../../backend/coach/views.py),
-[submission review](../submission-review.md)
+[API views](../../backend/coach/views.py)

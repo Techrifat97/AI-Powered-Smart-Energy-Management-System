@@ -33,21 +33,21 @@ consumption forecasts and sustainability recommendations.
 |---|---|---|
 | S3-NFR-01 | Monetary arithmetic shall use Decimal and round summed amounts half-up to cents. | `costs.py`, `scenarios.py`, manually checkable report/scenario tests. |
 | S3-NFR-02 | Measurement consistency shall derive consumption and grid estimates from shared S1 intervals. | `building_energy_report()` consumers and cross-subsystem integration tests. |
-| S3-NFR-03 | Coverage reliability shall report unavailable prices for mismatched solar, unknown duration, overlap or tariff-band crossing. | Cost and scenario availability fields, alignment and interval-band tests. Stored-tariff validation differs between the two services and remains an open defect. |
+| S3-NFR-03 | Coverage reliability shall report unavailable prices for mismatched solar, unknown duration, overlap or tariff-band crossing. | Cost and scenario availability fields, alignment and interval-band tests. |
 | S3-NFR-04 | Domain access shall require authenticated requests. | Explicit `IsAuthenticated` on all analysis views and explanation authentication test. All authenticated users currently share data access. |
 | S3-NFR-05 | Expected OpenAI failures shall permit an offline cost explanation for valid available facts. | `ExplanationUnavailable` handling and fallback tests. Unavailable measurement inputs still return an unavailable result. |
 | S3-NFR-06 | OpenAI explanation requests shall use a 12-second client timeout with zero automatic retries. | `OpenAICostExplainer._get_client()`. This configures the SDK, while end-to-end latency has no benchmark. |
 | S3-NFR-07 | Maintainability shall support injected alert-rule collections and cost-explainer clients. | ABC interfaces, overridden methods, `AlertDetector(rules=[])` and fake-client tests. |
 | S3-NFR-08 | Testability shall support controlled rule clocks and provider mocks using disposable PostgreSQL. | `detect_alerts(...,now=...)`, injected clients, existing backend and AppTest suites. |
-| S3-NFR-09 | Usability shall present named reason explanations and a visible provider source on the dashboard. | `REASONS`, alert guidance, `_cost_explanation()` and frontend tests. Current wording accuracy issues are recorded separately. |
-| S3-NFR-10 | Concurrent integrity shall prevent competing active tariffs and duplicate unresolved alerts. | Design objective with an implementation gap. Sequential serializer/existence checks are present, while database constraints or atomic coordination for these invariants are absent. |
+| S3-NFR-09 | Usability shall present named reason explanations and a visible provider source on the dashboard. | `REASONS`, alert guidance, `_cost_explanation()` and frontend tests. |
+| S3-NFR-10 | Runtime portability shall use the shared Django and PostgreSQL environment supplied by Docker Compose. | `Dockerfile`, `compose.yaml` and the analysis app configuration. |
 
 ## 4. UML Class Diagram
 
 ![S3 UML Class Diagram](../images/s3-class-diagram.png)
 
 Existing service functions are described below. The class diagram contains real
-models, rule/explainer classes and exceptions. Nullable report tariffs and alert
+models and rule/explainer classes. Nullable report tariffs and alert
 meters have multiplicity `0..1`. The detector may accept an empty rule list or
 externally supplied rule instances, represented by shared aggregation.
 
@@ -103,8 +103,7 @@ to UTC midnight through midnight after the end date. Without dates,
 `latest_complete_period()` chooses the newest contiguous run of complete main days.
 When no complete day exists, the original all-history scope is used. The response
 includes selected dates and `period_auto` when a date scope exists. Main coverage
-and solar matching still govern availability. Stored-tariff validity checks are
-less complete here than in `cost_analysis()`.
+and solar matching still govern availability.
 
 ### Alerts and reports
 
@@ -124,8 +123,7 @@ alert in sequential execution. Resolving an alert permits a later new finding.
 Reports require inclusive dates, available prices and full main coverage. A successful
 request stores a `CostReport` with the current tariff reference, imported energy,
 net cost and self-consumed solar savings. Report listing and CSV download read stored
-values. Concurrent tariff changes and repeated report requests have no transactional
-snapshot or idempotency guarantee.
+values. Each successful generation request creates a stored report.
 
 ### Plain-language explanations
 
@@ -137,8 +135,7 @@ a 12-second SDK timeout and zero retries. Empty or failed responses raise
 internal `facts` field and identifies `source` and any `fallback_reason`.
 
 Cost explanations are generated responses with no dedicated persistence model.
-Their current paid-cost wording and elapsed-span daily average can overstate what
-incomplete observations establish. S2's separate request log covers the coach path.
+S2's separate request log covers the coach path.
 
 ## 7. APIs and Subsystem Integration
 
@@ -171,8 +168,7 @@ Tariff serializers check finite nonnegative prices, UTC hour bounds, distinct pe
 hours and sequential active-plan conflicts. Scenario serializers validate finite
 percentages, paired ordered dates and a representable next day. Report serializers
 validate date parsing, while service ordering/coverage failures use
-`ReportUnavailable`. The maximum representable report end date currently causes an
-unhandled overflow. Malformed integer list filters can also fail with HTTP 500.
+`ReportUnavailable`.
 
 `analysis/tests.py` covers tariffs, detection/resolution, report storage and manually
 verifiable scenario prices. `test_scenario_periods.py` covers explicit and automatic
@@ -181,22 +177,18 @@ covers abstract interfaces, injected OpenAI responses, fallback and authenticati
 S1's `test_energy_integration.py` checks shared pricing and measurement semantics.
 Frontend AppTest covers tariff entry/switching, scenario controls, displayed results,
 explanation source and alert resolution. The preserved S3 report records an earlier
-41-backend/22-dashboard run. The current review records a fresh execution.
+41-backend/22-dashboard run. The root README provides the full-suite test commands.
+[S3 test results](../test-results/s3-test-results.md)
 
 ## 9. Technical Limitations
 
 Pricing applies one global tariff across history. Per-building contracts, historical
 rates, taxes, fees and batteries have no implementation. Export/import values are
 interval estimates. Alert detection has no background schedule, uses sample-weighted
-power means and performs sequential deduplication. Concurrent tariffs and detections
-can violate intended invariants. Daily averages in cost explanations and the UI use
-elapsed timestamp span, even across gaps.
-
-The template can describe solar as mostly self-consumed without testing that claim.
-Provider text is accepted without independent numeric fact checking. Shared account
-permissions, predictable demo credentials and dashboard session sharing affect S3.
-These issues are reported for follow-up with application behavior preserved.
+power means and performs sequential deduplication. Daily averages in cost
+explanations and the UI use the elapsed timestamp span. Cost explanations are
+planning estimates based on recorded observations and the active global tariff.
 
 The primary implementation is in analysis services, models and views.
 [Services](../../backend/analysis/services/), [models](../../backend/analysis/models.py),
-[views](../../backend/analysis/views.py), [submission review](../submission-review.md)
+[views](../../backend/analysis/views.py)

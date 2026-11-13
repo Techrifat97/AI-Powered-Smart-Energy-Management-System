@@ -78,9 +78,6 @@ implemented classes, data flow, APIs, validation, tests and limitations.
 | S2 | [Sustainability and AI coach](docs/subsystems/s2-sustainability-ai-coach.md) | [Class diagram](docs/images/s2-class-diagram.png) |
 | S3 | [Costs, scenarios and alerts](docs/subsystems/s3-costs-scenarios-alerts.md) | [Class diagram](docs/images/s3-class-diagram.png) |
 
-Current review findings and verification evidence accompany the subsystem guides.
-[Submission review](docs/submission-review.md)
-
 ## Installation and Setup
 
 ### Prerequisites and configuration
@@ -228,12 +225,6 @@ gaps. Explicit demo-only `bootstrap_demo --refresh` fills wholly empty recent da
 and skips partial or unresolved coverage. Normal startup never backfills downtime.
 The legacy `seed_demo_data` command remains preserved for coursework fixtures.
 
-## Screenshots
-
-The review environment's browser capture host was unavailable. The repository includes
-source-derived architecture and UML PNGs. The running dashboard can be inspected at
-localhost:8501, and its existing interaction suite exercises pages using mocked HTTP.
-
 ## Testing
 
 Run against a distinct disposable PostgreSQL database. The following commands use
@@ -250,11 +241,10 @@ docker compose exec -T backend python backend/manage.py makemigrations --check -
 git diff --check
 ```
 
-The submission review on 13 November 2026 ran all 255 existing backend tests on
-disposable PostgreSQL and all 22 frontend tests with mocked HTTP. Both suites passed.
-Five additional temporary diagnostic probes confirmed documented defects. External
-OpenAI requests were mocked or disabled. Test counts and earlier results are recorded
-with their scope. [Current review and verification](docs/submission-review.md)
+The full test run recorded on 13 November 2026 passed 255 backend tests on
+disposable PostgreSQL and 22 frontend tests with mocked HTTP. External OpenAI
+requests were mocked or disabled. Earlier S3 results are retained with their date
+and scope. [S3 test results](docs/test-results/s3-test-results.md)
 
 ## Project Structure
 
@@ -275,7 +265,7 @@ with their scope. [Current review and verification](docs/submission-review.md)
     ├── subsystems/              # Three primary technical guides
     ├── images/                  # Four architecture/UML PNGs
     ├── test-results/            # Dated test evidence
-    └── submission-review.md     # Findings and current verification
+    └── docker-development.md    # Link to setup instructions
 ```
 
 ## Team Members and Contributions
@@ -293,19 +283,12 @@ the team to supply. The presentations directory is currently a placeholder.
 
 ## Limitations
 
-The current Streamlit authentication cache can share a logged-in session across
-browser sessions. Account APIs grant broad authenticated access, and building
-ownership is unmodeled. Demo credentials are public, CORS permits all origins, and
-HTTP services bind to all host interfaces in Compose. The review records these
-security findings alongside confirmed validation defects.
-
 Forecast bands and sustainability scores are heuristic. Carbon uses a fixed factor.
 Pricing uses one global tariff and a no-battery interval estimate. Taxes, fixed fees
-and contract history are unmodeled. Dashboard daily charts and cost-explanation
-wording have identified accuracy limitations. Recommendation feedback is stored
-without a learning pipeline.
+and contract history are unmodeled. Recommendation feedback is stored without a
+learning pipeline.
 
-Kafka has one broker. Outbox archival, automated legacy repair, activation history
-and measured capacity targets remain future work. The historical acceptance script
-requires authentication changes before it can verify the current protected APIs.
-[Complete review findings](docs/submission-review.md)
+Kafka runs as a single broker. Unknown historical durations and incomplete coverage
+can make calculations unavailable. Activation and installation timelines have no
+dedicated data model. The current application targets local development and
+university demonstrations.

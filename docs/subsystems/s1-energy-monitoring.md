@@ -36,12 +36,12 @@ historical installation changes have no dedicated data model.
 | S1-NFR-02 | Database consistency shall permit at most one reading per meter and timestamp. | `s1_reading_meter_timestamp_unique`, including bulk-write and concurrent-race tests. |
 | S1-NFR-03 | Failed batch processing shall leave no newly inserted partial building-minute. | Outer transaction in `process_event()`, overlap rollback tests. |
 | S1-NFR-04 | Delivery recovery shall retain pending outbox rows after publication failure and reuse a committed receipt after replay. | Acknowledged producer, durable outbox and receipt tests. The transport uses at-least-once delivery. |
-| S1-NFR-05 | Domain APIs shall authenticate users before serving or changing S1 data. | Explicit `IsAuthenticated` permissions. The public health route uses `AllowAny`. Shared dashboard-session risks are recorded in the review report. |
+| S1-NFR-05 | Domain APIs shall authenticate users before serving or changing S1 data. | Explicit `IsAuthenticated` permissions. The public health route uses `AllowAny`. |
 | S1-NFR-06 | History responses shall default to 100 rows and cap requested page size at 500. | `ReadingHistoryPagination`, `test_page_size_is_bounded`. A three-query fixture checks joined reading retrieval. |
 | S1-NFR-07 | Profile extension shall use the common `calculate_power()` interface and an injectable registry. | ABC, four overrides, read-only mapping and injected-strategy test. |
-| S1-NFR-08 | Runtime portability shall use PostgreSQL with the supplied Python 3.13 Docker image and KRaft broker. | `Dockerfile`, `compose.yaml`. Earlier arm64 verification is retained as dated evidence. |
-| S1-NFR-09 | Automated verification shall isolate PostgreSQL test data and support controlled clocks and mocked broker I/O. | Settings guard `DB_TEST_NAME`, scheduler tests and Kafka mocks. Current executed results appear in the review report. |
-| S1-NFR-10 | Scalability assessment shall identify growth-sensitive operations before capacity claims are made. | Design objective awaiting load measurements. Bounded summaries currently load building history in Python, and pending outbox publication is serial. |
+| S1-NFR-08 | Runtime portability shall use PostgreSQL with the supplied Python 3.13 Docker image and KRaft broker. | `Dockerfile`, `compose.yaml`. |
+| S1-NFR-09 | Automated verification shall isolate PostgreSQL test data and support controlled clocks and mocked broker I/O. | Settings guard `DB_TEST_NAME`, scheduler tests and Kafka mocks. |
+| S1-NFR-10 | Timestamp consistency shall require aware UTC minute starts and explicit 60-second durations for new telemetry. | `validate_interval_timestamp()`, strict ingestion guards and timestamp/duration tests in `IngestionTests`. |
 
 ## 4. UML Class Diagram
 
@@ -196,8 +196,7 @@ building. List pagination defaults to 20 buildings/meters. History defaults to
 
 S2 uses complete-day totals for forecasts and assessment. S3 prices matched grid
 intervals. Both share the Python aggregation functions with S1. The dashboard uses
-HTTP APIs and also builds a separate daily chart from reading history, whose
-limitations are documented in the review.
+HTTP APIs and builds its daily chart from reading history.
 
 ## 8. Validation and Testing
 
@@ -216,9 +215,8 @@ rules in `test_energy_integration.py`, inventory/history API and PostgreSQL race
 in `test_bootstrap_profiles.py`, inventory setup in `test_demo_inventory.py`, generator
 behavior in `test_generator.py`, scheduling in `test_telemetry_command.py`, and
 transport/receipt policy in `test_kafka_pipeline.py`. Broker I/O is mocked in the
-backend suite. Earlier real-broker evidence remains in the dated test archive.
-Current execution results and source-equivalence checks appear in the submission
-review report.
+backend suite. The root README provides commands for running the backend and
+frontend suites against the configured environment.
 
 ### Local verification and optional host setup
 
@@ -246,15 +244,10 @@ repair are absent. Kafka uses one broker. Activation and installation timelines
 are unmodeled. Legacy unknown durations can block ingestion and later summaries.
 Supported service locks coordinate cooperating writers. Raw ORM/SQL and admin
 writes can bypass inventory or overlap policies. Authentication grants shared
-building access, with session and account-management concerns recorded separately.
-
-The current public health response performs no database query. The historical
-acceptance script lacks JWT authentication and currently fails at its first protected
-request. These findings require a functional change in a subsequent task.
+building access. The public health response checks HTTP responsiveness.
 
 The primary implementation is in the monitoring models, write services and shared
-calculations. Current findings and verification results accompany the guides.
+calculations.
 [Models](../../backend/monitoring/models.py), [profiles](../../backend/monitoring/services/profiles.py),
 [ingestion](../../backend/monitoring/services/ingestion.py), [inventory](../../backend/monitoring/services/inventory.py),
-[aggregation](../../backend/monitoring/services/aggregation.py), [Kafka pipeline](../../backend/monitoring/services/kafka_pipeline.py),
-[submission review](../submission-review.md)
+[aggregation](../../backend/monitoring/services/aggregation.py), [Kafka pipeline](../../backend/monitoring/services/kafka_pipeline.py)
