@@ -1,33 +1,34 @@
 name: smart-energy
 
 x-app: &app
-  image: ${SMART_ENERGY_IMAGE:-smart-energy-app:kafka-oop}
+  image: ${SMART_ENERGY_IMAGE:-smart-energy-app:latest}
   build: .
   init: true
-  restart: "no"
   environment:
-    SECRET_KEY: ${DOCKER_SECRET_KEY:?Set DOCKER_SECRET_KEY in .env.docker}
-    DEBUG: "False"
-    ALLOWED_HOSTS: localhost,127.0.0.1,backend,testserver
-    DB_NAME: ${DOCKER_DB_NAME:-smart_energy_db}
-    DB_USER: ${DOCKER_DB_USER:-smart_energy}
-    DB_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD in .env.docker}
+    SECRET_KEY: ${SECRET_KEY:-django-insecure-smart-energy-management-2026-key}
+    DEBUG: ${DEBUG:-False}
+    ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend,testserver}
+    DB_NAME: ${DB_NAME:-smart_energy_db}
+    DB_USER: ${DB_USER:-smart_energy}
+    DB_PASSWORD: ${DB_PASSWORD:-smart_energy_password}
     DB_HOST: db
     DB_PORT: "5432"
-    DB_TEST_NAME: ${DOCKER_TEST_DB_NAME:-test_smart_energy_docker}
+    DB_TEST_NAME: ${DB_TEST_NAME:-test_smart_energy_db}
     OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
     SMART_ENERGY_DEMO: ${DEMO_MODE:-true}
     KAFKA_BOOTSTRAP_SERVERS: kafka:9092
     KAFKA_CONSUMER_GROUP: s1-ingestion-v1
+    SMART_ENERGY_API: http://backend:8000/api
 
 services:
   db:
     image: postgres:18-bookworm
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DOCKER_DB_NAME:-smart_energy_db}
-      POSTGRES_USER: ${DOCKER_DB_USER:-smart_energy}
-      POSTGRES_PASSWORD: ${DOCKER_DB_PASSWORD:?Set DOCKER_DB_PASSWORD in .env.docker}
+      POSTGRES_DB: ${DB_NAME:-smart_energy_db}
+      POSTGRES_USER: ${DB_USER:-smart_energy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-smart_energy_password}
     volumes:
       # PostgreSQL 18+ uses /var/lib/postgresql/18/docker within this mount.
       - postgres_data:/var/lib/postgresql
@@ -39,19 +40,29 @@ services:
       start_period: 10s
     stop_grace_period: 30s
 
-  migrate:
+  backend:
     <<: *app
-    command: ["python", "backend/manage.py", "migrate", "--noinput"]
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        python backend/manage.py migrate --noinput
+        python backend/manage.py bootstrap_demo
+        exec gunicorn --chdir backend config.wsgi:application --bind 0.0.0.0:8000 --workers 2 --access-logfile - --error-logfile -
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy
-
-  demo_bootstrap:
-    <<: *app
-    command: ["python", "backend/manage.py", "bootstrap_demo"]
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/buildings/', timeout=3).close()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    stop_grace_period: 30s
 
   kafka:
     image: apache/kafka:4.3.2
@@ -95,46 +106,38 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic energy.readings.raw --partitions 3 --replication-factor 1
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic energy.readings.dead-letter --partitions 3 --replication-factor 1 --config max.message.bytes=2000000
 
-  backend:
-    <<: *app
-    ports:
-      - "127.0.0.1:${DOCKER_BACKEND_PORT:-8000}:8000"
-    depends_on:
-      db:
-        condition: service_healthy
-      demo_bootstrap:
-        condition: service_completed_successfully
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/buildings/', timeout=3).close()"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    stop_grace_period: 30s
-
   telemetry:
     <<: *app
-    command: ["python", "backend/manage.py", "run_telemetry", "--mode", "kafka"]
     restart: unless-stopped
+    command: ["python", "backend/manage.py", "run_telemetry", "--mode", "kafka"]
     depends_on:
-      db:
+      backend:
         condition: service_healthy
-      demo_bootstrap:
-        condition: service_completed_successfully
       kafka_init:
         condition: service_completed_successfully
     stop_grace_period: 20s
 
   consumer:
     <<: *app
-    command: ["python", "backend/manage.py", "consume_telemetry"]
     restart: unless-stopped
+    command: ["python", "backend/manage.py", "consume_telemetry"]
     depends_on:
-      demo_bootstrap:
-        condition: service_completed_successfully
+      backend:
+        condition: service_healthy
       kafka_init:
         condition: service_completed_successfully
     stop_grace_period: 30s
+
+  frontend:
+    <<: *app
+    restart: unless-stopped
+    command: ["streamlit", "run", "frontend/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+    stop_grace_period: 10s
 
 volumes:
   postgres_data:
