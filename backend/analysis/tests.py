@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -7,7 +7,8 @@ from monitoring.models import Building, Meter, EnergyReading
 from analysis.models import TariffPlan, EnergyAlert, CostReport
 from datetime import datetime, timedelta, timezone as dt_timezone
 from django.utils import timezone
-from analysis.services.alerts import detect_alerts
+from analysis.services.alerts import AlertDetector, AlertRule, default_rules, detect_alerts
+from analysis.services.errors import AnalysisError, ReportUnavailable
 
 
 class AnalysisAPITests(TestCase):
@@ -258,3 +259,25 @@ class ReportAndScenarioTests(TestCase):
         self.assertEqual(self.scenario(consumption_change_pct=-150).status_code, 400)
         self.assertEqual(self.scenario(tariff={'rate_standard_eur_per_kwh': -1,
                                                'rate_peak_eur_per_kwh': 1}).status_code, 400)
+
+
+class AlertRuleDesignTests(SimpleTestCase):
+    """Class-design checks that need no database."""
+
+    def test_alert_rule_is_abstract(self):
+        with self.assertRaises(TypeError):
+            AlertRule()
+
+    def test_default_rules_are_polymorphic_alert_rules(self):
+        rules = default_rules()
+        self.assertTrue(all(isinstance(rule, AlertRule) for rule in rules))
+        self.assertEqual({rule.alert_type for rule in rules},
+                         {'PEAK_SPIKE', 'UNUSUAL_NIGHT_LOAD', 'METER_OFFLINE', 'BUDGET_EXCEEDED'})
+
+    def test_report_unavailable_is_an_analysis_error(self):
+        error = ReportUnavailable('period_not_fully_covered')
+        self.assertIsInstance(error, AnalysisError)
+        self.assertEqual(error.reason, 'period_not_fully_covered')
+
+    def test_detector_accepts_custom_rule_set(self):
+        self.assertEqual(AlertDetector(rules=[]).rules, [])

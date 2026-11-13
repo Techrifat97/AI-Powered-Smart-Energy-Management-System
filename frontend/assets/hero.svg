@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540" role="img" aria-label="Illustration of a campus building with solar panels, trees and a savings chart">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#DDF3E8"/>
+      <stop offset="1" stop-color="#F6FBF8"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F6FB5"/>
+      <stop offset="1" stop-color="#1B3F73"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="540" rx="28" fill="url(#sky)"/>
+
+  <!-- sun -->
+  <g transform="translate(790 120)">
+    <g stroke="#FFC93C" stroke-width="8" stroke-linecap="round">
+      <line x1="0" y1="-78" x2="0" y2="-58"/><line x1="0" y1="58" x2="0" y2="78"/>
+      <line x1="-78" y1="0" x2="-58" y2="0"/><line x1="58" y1="0" x2="78" y2="0"/>
+      <line x1="-55" y1="-55" x2="-41" y2="-41"/><line x1="55" y1="55" x2="41" y2="41"/>
+      <line x1="-55" y1="55" x2="-41" y2="41"/><line x1="55" y1="-55" x2="41" y2="-41"/>
+    </g>
+    <circle r="40" fill="#FFC93C"/>
+  </g>
+
+  <!-- clouds -->
+  <g fill="#FFFFFF" opacity="0.95">
+    <ellipse cx="170" cy="110" rx="62" ry="22"/><ellipse cx="215" cy="96" rx="40" ry="24"/>
+    <ellipse cx="560" cy="70" rx="52" ry="18"/><ellipse cx="596" cy="58" rx="32" ry="19"/>
+  </g>
+
+  <!-- ground -->
+  <path d="M0 410 Q240 380 480 405 T960 395 V540 H0 Z" fill="#A9DDBF"/>
+  <path d="M0 450 Q300 425 600 448 T960 440 V540 H0 Z" fill="#8BCFA8"/>
+
+  <!-- building: main block -->
+  <rect x="250" y="210" width="330" height="205" rx="8" fill="#2F6F5E"/>
+  <rect x="250" y="210" width="330" height="22" rx="8" fill="#245A4B"/>
+  <!-- building: side wing -->
+  <rect x="580" y="285" width="150" height="130" rx="8" fill="#3A8570"/>
+  <!-- windows main -->
+  <g fill="#CFEFE0">
+    <rect x="275" y="250" width="44" height="34" rx="4"/><rect x="335" y="250" width="44" height="34" rx="4"/>
+    <rect x="395" y="250" width="44" height="34" rx="4"/><rect x="455" y="250" width="44" height="34" rx="4"/>
+    <rect x="515" y="250" width="44" height="34" rx="4"/>
+    <rect x="275" y="305" width="44" height="34" rx="4"/><rect x="335" y="305" width="44" height="34" rx="4"/>
+    <rect x="395" y="305" width="44" height="34" rx="4"/><rect x="455" y="305" width="44" height="34" rx="4"/>
+    <rect x="515" y="305" width="44" height="34" rx="4"/>
+    <rect x="275" y="360" width="44" height="34" rx="4"/><rect x="515" y="360" width="44" height="34" rx="4"/>
+  </g>
+  <!-- entrance -->
+  <rect x="385" y="352" width="64" height="63" rx="6" fill="#F2FBF6"/>
+  <rect x="417" y="352" width="2" height="63" fill="#2F6F5E"/>
+  <!-- windows wing -->
+  <g fill="#CFEFE0">
+    <rect x="602" y="312" width="38" height="30" rx="4"/><rect x="662" y="312" width="38" height="30" rx="4"/>
+    <rect x="602" y="362" width="38" height="30" rx="4"/><rect x="662" y="362" width="38" height="30" rx="4"/>
+  </g>
+
+  <!-- solar panels on roof -->
+  <g>
+    <polygon points="270,208 360,208 378,176 288,176" fill="url(#panel)"/>
+    <polygon points="372,208 462,208 480,176 390,176" fill="url(#panel)"/>
+    <polygon points="474,208 564,208 582,176 492,176" fill="url(#panel)"/>
+    <g stroke="#8DB8E8" stroke-width="1.5" opacity="0.8">
+      <line x1="300" y1="208" x2="318" y2="176"/><line x1="330" y1="208" x2="348" y2="176"/>
+      <line x1="402" y1="208" x2="420" y2="176"/><line x1="432" y1="208" x2="450" y2="176"/>
+      <line x1="504" y1="208" x2="522" y2="176"/><line x1="534" y1="208" x2="552" y2="176"/>
+    </g>
+  </g>
+  <!-- wing roof panel -->
+  <polygon points="596,283 700,283 716,256 612,256" fill="url(#panel)"/>
+
+  <!-- trees -->
+  <g>
+    <rect x="156" y="372" width="12" height="46" fill="#7A5638"/>
+    <circle cx="162" cy="356" r="38" fill="#3FAE7A"/><circle cx="140" cy="372" r="24" fill="#4CC48B"/>
+    <rect x="788" y="384" width="12" height="40" fill="#7A5638"/>
+    <circle cx="794" cy="368" r="32" fill="#3FAE7A"/><circle cx="814" cy="382" r="20" fill="#4CC48B"/>
+    <rect x="86" y="398" width="10" height="30" fill="#7A5638"/>
+    <circle cx="91" cy="386" r="24" fill="#4CC48B"/>
+  </g>
+
+  <!-- power pole -->
+  <g stroke="#12332B" stroke-width="6" stroke-linecap="round">
+    <line x1="872" y1="250" x2="872" y2="430"/>
+    <line x1="846" y1="272" x2="898" y2="272"/>
+  </g>
+  <path d="M730 330 Q800 300 846 272" stroke="#12332B" stroke-width="3" fill="none"/>
+
+  <!-- floating card: savings chart -->
+  <g transform="translate(40 150)">
+    <rect width="190" height="128" rx="16" fill="#FFFFFF" stroke="#CFE6DA" stroke-width="2"/>
+    <text x="18" y="32" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#4A6B61">Electricity cost</text>
+    <text x="18" y="64" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" fill="#0B8F6B">-18%</text>
+    <g fill="#CFE6DA">
+      <rect x="22" y="84" width="20" height="30" rx="3"/><rect x="52" y="76" width="20" height="38" rx="3"/>
+    </g>
+    <g fill="#3FAE7A">
+      <rect x="82" y="92" width="20" height="22" rx="3"/><rect x="112" y="98" width="20" height="16" rx="3"/>
+      <rect x="142" y="102" width="20" height="12" rx="3"/>
+    </g>
+  </g>
+
+  <!-- floating badge: energy bolt -->
+  <g transform="translate(690 200)">
+    <circle r="34" fill="#FFFFFF" stroke="#F4D675" stroke-width="3"/>
+    <polygon points="4,-20 -14,4 -2,4 -6,20 14,-6 2,-6" fill="#F5A800"/>
+  </g>
+
+  <!-- floating badge: leaf -->
+  <g transform="translate(150 300)">
+    <circle r="30" fill="#FFFFFF" stroke="#BFE3CF" stroke-width="3"/>
+    <path d="M-12 10 C-12 -10 2 -18 16 -16 C16 -2 8 12 -12 10 Z" fill="#3FAE7A"/>
+    <path d="M-12 10 L6 -6" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+  </g>
+</svg>

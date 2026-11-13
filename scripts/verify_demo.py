@@ -20,7 +20,7 @@ def main():
                     headers={'Content-Type':'application/json'},method=method)
         with urlopen(req,timeout=30) as response:return json.load(response)
     buildings=request('GET','/buildings/')['results']
-    demo=next(b for b in buildings if b['name']=='Docker demo');bid=demo['id']
+    demo=next(b for b in buildings if b['name']=='Campus Sonnenstraße Dortmund');bid=demo['id']
     summary=request('GET',f'/buildings/{bid}/summary/')
     assert summary['main_data_available'] and summary['grid_estimates_available']
     forecast=request('GET',f'/buildings/{bid}/forecast/')

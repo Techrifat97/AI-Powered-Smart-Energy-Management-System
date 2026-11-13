@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from monitoring.models import Building
 from .services.alerts import detect_alerts
 from .services.costs import cost_analysis
+from .services.explainer import explain_costs
 from .services.reports import ReportUnavailable, generate_cost_report
 from .services.scenarios import run_scenario
 from .models import TariffPlan, EnergyAlert, CostReport
@@ -94,6 +95,19 @@ class BuildingCostAnalysisAPIView(APIView):
     def get(self, request, building_id):
         building = get_object_or_404(Building, id=building_id)
         return Response(cost_analysis(building), status=status.HTTP_200_OK)
+
+
+class BuildingCostExplanationView(APIView):
+    """
+    Explain the building's costs in plain language (OpenAI when configured, else built-in rules).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, building_id):
+        building = get_object_or_404(Building, id=building_id)
+        result = explain_costs(building)
+        result.pop('facts', None)
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class BuildingScenarioAPIView(APIView):
