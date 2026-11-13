@@ -9,6 +9,8 @@ APP=Path(__file__).with_name('app.py')
 
 class DashboardTests(TestCase):
     def setUp(self):
+        import streamlit as st
+        st.cache_resource.clear()
         self.buildings=[]
         self.meters=[]
         self.users=[{'id':1,'username':'admin','email':'admin@test.com','is_staff':True,'date_joined':'2026-01-01'}]
@@ -95,6 +97,22 @@ class DashboardTests(TestCase):
         self.assertEqual(reloaded_app.session_state.get('auth_token'), token)
         self.assertEqual(len(reloaded_app.form), 0)
         self.assertTrue(any(b.label == 'Log out' for b in reloaded_app.button))
+
+    def test_session_restored_on_tab_reload_even_without_query_params(self):
+        app = AppTest.from_file(str(APP)).run()
+        app.text_input[0].set_value('admin')
+        app.text_input[1].set_value('admin123')
+        next(b for b in app.button if b.label == 'Log In').click().run()
+        self.assertFalse(app.exception)
+        token = app.session_state.get('auth_token')
+
+        # Simulate F5 on tabbed page without sid in URL
+        tab_reloaded_app = AppTest.from_file(str(APP))
+        tab_reloaded_app.run()
+        self.assertFalse(tab_reloaded_app.exception)
+        self.assertEqual(tab_reloaded_app.session_state.get('auth_token'), token)
+        self.assertEqual(len(tab_reloaded_app.form), 0)
+        self.assertTrue(any(b.label == 'Log out' for b in tab_reloaded_app.button))
 
     def inventory(self):
         self.buildings=[dict(id=1,name='Renamed building',location='Campus',area_sqm=1000,

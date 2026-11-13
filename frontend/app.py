@@ -44,11 +44,8 @@ def call(method, path, **kwargs):
     except ValueError:
         data = None
     if response.status_code == 401 and not path.startswith("/auth/"):
-        sid = st.query_params.get("sid")
-        if sid:
-            _SESSION_CACHE.pop(sid, None)
-        st.session_state.pop("auth_token", None)
-        st.session_state.pop("auth_user", None)
+        _SESSION_CACHE.clear()
+        st.session_state.clear()
         st.query_params.clear()
         st.rerun()
     if response.status_code >= 400:
@@ -59,9 +56,18 @@ def call(method, path, **kwargs):
 # Attempt session restore on browser refresh / reload
 if "auth_token" not in st.session_state:
     sid = st.query_params.get("sid")
+    cached = None
     if isinstance(sid, str) and sid in _SESSION_CACHE:
-        st.session_state["auth_token"] = _SESSION_CACHE[sid]["token"]
-        st.session_state["auth_user"] = _SESSION_CACHE[sid]["user"]
+        cached = _SESSION_CACHE[sid]
+    elif "active_session" in _SESSION_CACHE:
+        cached = _SESSION_CACHE["active_session"]
+
+    if cached and isinstance(cached, dict) and "token" in cached:
+        st.session_state["auth_token"] = cached["token"]
+        st.session_state["auth_user"] = cached.get("user", {})
+        st.session_state["session_id"] = cached.get("sid", sid)
+        if cached.get("sid"):
+            st.query_params["sid"] = cached["sid"]
     else:
         cookies = getattr(st.context, "cookies", None)
         cookie_token = cookies.get("auth_token") if hasattr(cookies, "get") else None
@@ -70,6 +76,22 @@ if "auth_token" not in st.session_state:
             if not err and profile:
                 st.session_state["auth_token"] = cookie_token
                 st.session_state["auth_user"] = profile
+
+if "auth_token" in st.session_state:
+    sid = st.session_state.get("session_id")
+    if not sid:
+        uname = st.session_state.get("auth_user", {}).get("username", "admin")
+        sid = f"s_{uname}_{int(datetime.now(timezone.utc).timestamp())}"
+        st.session_state["session_id"] = sid
+    session_data = {
+        "token": st.session_state["auth_token"],
+        "user": st.session_state.get("auth_user", {}),
+        "sid": sid,
+    }
+    _SESSION_CACHE[sid] = session_data
+    _SESSION_CACHE["active_session"] = session_data
+    if st.query_params.get("sid") != sid:
+        st.query_params["sid"] = sid
 
 
 def show(error):
@@ -125,7 +147,9 @@ def login_screen():
                         user_info = profile or {"username": username}
                         st.session_state["auth_user"] = user_info
                         sid = f"s_{username}_{int(datetime.now(timezone.utc).timestamp())}"
+                        st.session_state["session_id"] = sid
                         _SESSION_CACHE[sid] = {"token": token, "user": user_info}
+                        _SESSION_CACHE["active_session"] = {"token": token, "user": user_info, "sid": sid}
                         st.query_params["sid"] = sid
                         st.success("Authenticated successfully!")
                         st.rerun()
@@ -604,7 +628,30 @@ def recommendations():
 # --- navigation & routing --------------------------------------------------
 if "auth_token" not in st.session_state:
     login_page = st.Page(login_screen, title="Log In", icon=":material/login:", url_path="login", default=True)
-    pg = st.navigation([login_page], position="hidden")
+    overview_page = st.Page(login_screen, title="Overview", url_path="overview")
+    building_page = st.Page(login_screen, title="Building Management", url_path="building-management")
+    meter_page = st.Page(login_screen, title="Meter Management", url_path="meter-management")
+    team_page = st.Page(login_screen, title="Team Management", url_path="team-management")
+    costs_page = st.Page(login_screen, title="Costs", url_path="costs")
+    scenarios_page = st.Page(login_screen, title="Scenarios", url_path="scenarios")
+    alerts_page = st.Page(login_screen, title="Alerts", url_path="alerts")
+    reports_page = st.Page(login_screen, title="Reports", url_path="reports")
+    forecast_page = st.Page(login_screen, title="Forecast", url_path="forecast")
+    recommendations_page = st.Page(login_screen, title="Recommendations", url_path="recommendations")
+
+    pg = st.navigation([
+        login_page,
+        overview_page,
+        building_page,
+        meter_page,
+        team_page,
+        costs_page,
+        scenarios_page,
+        alerts_page,
+        reports_page,
+        forecast_page,
+        recommendations_page,
+    ], position="hidden")
     pg.run()
 else:
     overview_page = st.Page(overview, title="Overview", icon=":material/dashboard:", url_path="overview", default=True)
@@ -636,11 +683,8 @@ else:
     username = user.get("username", "admin") if isinstance(user, dict) else "admin"
     st.sidebar.caption(f":bust_in_silhouette: Logged in as: **{username}**")
     if st.sidebar.button("Log out", key="logout_btn", use_container_width=True):
-        sid = st.query_params.get("sid")
-        if sid:
-            _SESSION_CACHE.pop(sid, None)
-        st.session_state.pop("auth_token", None)
-        st.session_state.pop("auth_user", None)
+        _SESSION_CACHE.clear()
+        st.session_state.clear()
         st.query_params.clear()
         st.rerun()
     st.sidebar.divider()
