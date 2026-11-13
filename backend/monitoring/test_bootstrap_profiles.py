@@ -98,8 +98,11 @@ class BootstrapTests(TestCase):
     def test_s2_and_s3_ready_without_openai(self):
         from rest_framework.test import APIClient
         from django.utils import timezone as django_timezone
+        from django.contrib.auth.models import User
         result=bootstrap_demo(now=django_timezone.now())
         client=APIClient();bid=result['building_id']
+        user=User.objects.filter(username='admin').first() or User.objects.create_user('testadmin','a@b.com','pw')
+        client.force_authenticate(user=user)
         forecast=client.get(f'/api/buildings/{bid}/forecast/')
         self.assertEqual(forecast.status_code,200)
         self.assertEqual(len(forecast.data['forecast']),7)

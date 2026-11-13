@@ -125,6 +125,7 @@ page = st.sidebar.radio(
         "Overview",
         "Building Management",
         "Meter Management",
+        "Team Management",
         "Costs",
         "Scenarios",
         "Alerts",
@@ -297,6 +298,60 @@ def meter_management():
                 st.success("New meter added successfully!")
                 st.rerun()
 
+
+def team_management():
+    st.header("Team Management")
+    st.write("View active team members and manage group collaboration access.")
+
+    users, err = all_rows("/accounts/users/")
+    if show(err):
+        return
+
+    st.subheader(f"Team Members ({len(users)})")
+    if users:
+        table_rows = []
+        for u in users:
+            table_rows.append({
+                "ID": u.get("id"),
+                "Username": u.get("username"),
+                "Email": u.get("email") or "—",
+                "Name": f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() or "—",
+                "Role": "Admin / Staff" if u.get("is_staff") else "Member",
+                "Joined": str(u.get("date_joined", ""))[:10],
+            })
+        st.dataframe(pd.DataFrame(table_rows), use_container_width=True)
+    else:
+        st.info("No team members found.")
+
+    st.subheader("Add a Member")
+    with st.form("add_member_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            new_u = st.text_input("Username *", key="team_member_username")
+            new_e = st.text_input("Email", key="team_member_email")
+        with col2:
+            new_p = st.text_input("Temporary Password *", type="password", key="team_member_password")
+            new_fn = st.text_input("First Name", key="team_member_fn")
+
+        st.caption("Enter a temporary password for the member to log in.")
+        submit_btn = st.form_submit_button("Add Member")
+
+        if submit_btn:
+            u_clean = new_u.strip()
+            p_clean = new_p.strip()
+            if not u_clean or not p_clean:
+                st.error("Username and temporary password are required.")
+            else:
+                payload = {
+                    "username": u_clean,
+                    "password": p_clean,
+                    "email": new_e.strip(),
+                    "first_name": new_fn.strip(),
+                }
+                _, err = call("POST", "/accounts/users/", json=payload)
+                if not show(err):
+                    st.success(f"Team member '{u_clean}' added successfully!")
+                    st.rerun()
 
 
 def costs():
@@ -502,6 +557,7 @@ PAGES = {
     "Overview": overview,
     "Building Management": building_management,
     "Meter Management": meter_management,
+    "Team Management": team_management,
     "Costs": costs,
     "Scenarios": scenarios,
     "Alerts": alerts,
@@ -510,7 +566,7 @@ PAGES = {
     "Recommendations": recommendations
 }
 
-if building_id is None and page != "Building Management":
+if building_id is None and page not in ("Building Management", "Team Management"):
     st.info("No building selected. Open Building Management to create the first building.")
 else:
     PAGES[page]()

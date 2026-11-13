@@ -23,8 +23,8 @@ The current application targets local development and university demonstrations.
 | S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
 | S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection with resolve/filter | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
 | Runtime | Docker Compose PostgreSQL, migration/bootstrap jobs, Gunicorn, KRaft Kafka, producer and consumer | Public deployment hardening and operational backup/restore tooling |
-| Accounts | Installed Django app scaffold; Django's built-in auth/admin components remain available | Custom account/authentication APIs and per-user building permissions |
-| Frontend | Streamlit dashboard (`frontend/app.py`): overview, building/meter management, dated scenarios, costs, alerts, reports, forecast, recommendations and feedback | Runs on the host, not in Docker Compose; no login |
+| Accounts | JWT authentication (`/api/auth/token/`), user management API (`/api/accounts/users/`), pre-seeded `admin` account | Per-user granular object-level building ACLs |
+| Frontend | Streamlit dashboard (`frontend/app.py`): JWT login gate, team management, overview, building/meter management, dated scenarios, costs, alerts, reports, forecast, recommendations and feedback | Multi-tenant tenant-isolation styling |
 
 ## Architecture and data flow
 
@@ -109,7 +109,9 @@ Works on Windows (PowerShell), macOS, and Linux from the repository root.
 
 4. Open the applications:
    - **Streamlit Dashboard**: [http://localhost:8501](http://localhost:8501)
+     - Default credentials: `admin` / `admin123`
    - **Backend API**: [http://localhost:8000/api/](http://localhost:8000/api/)
+   - **Public Health Check**: [http://localhost:8000/api/health/](http://localhost:8000/api/health/)
 
 5. Stop all services:
 
@@ -120,10 +122,14 @@ Works on Windows (PowerShell), macOS, and Linux from the repository root.
 ## API overview
 
 The `/api/monitoring/`, `/api/coach/` and `/api/analysis/` prefixes also expose their
-subsystems' routes. The table uses the shared `/api/` convenience prefix.
+subsystems' routes. The table uses the shared `/api/` convenience prefix. All domain endpoints require JWT Bearer authentication (`Authorization: Bearer <token>`).
 
 | Subsystem | Route | Methods | Purpose |
 | --- | --- | --- | --- |
+| Core | `/api/health/` | GET | Public container health probe (`AllowAny`) |
+| Auth | `/api/auth/token/` | POST | Obtain 24-hour SimpleJWT access/refresh tokens |
+| Accounts | `/api/accounts/users/` | GET, POST | List registered users or create a new user account |
+| Accounts | `/api/accounts/me/` | GET | Retrieve authenticated profile |
 | S1 | `/api/buildings/` | GET, POST | List/create buildings |
 | S1 | `/api/buildings/{id}/` | GET, PUT, PATCH | Retrieve/update building details |
 | S1 | `/api/buildings/{id}/meters/` | GET, POST | List/create assigned meters |
@@ -174,11 +180,8 @@ an assessment of capstone completeness.
 - Forecast bands and recommendation scores are illustrative. Cost estimates are
   scenarios, not complete utility bills; fixed fees, taxes and contract history
   are not modeled.
-- Permissions are `AllowAny`, CORS is permissive, and custom authentication and
-  per-user access control are incomplete. Localhost binding is not sufficient
-  for public internet deployment.
-- The dashboard has no authentication. The [S1 OOP UML](docs/s1-architecture.md) describes implemented classes.
-  Submission requirements must be assessed against the university rubric.
+- Domain API endpoints enforce JWT authentication (`IsAuthenticated`); health checks use `/api/health/` (`AllowAny`).
+- The Streamlit dashboard enforces user session authentication, attaching JWT Bearer tokens to all backend requests. Granular object-level building permissions are not modeled.
 
 ## Documentation
 
