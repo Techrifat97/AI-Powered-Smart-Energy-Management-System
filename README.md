@@ -21,7 +21,7 @@ The current application targets local development and university demonstrations.
 | --- | --- | --- |
 | S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, OOP telemetry profiles, Kafka outbox/consumer, automatic demo history, history and summaries | Activation history and reviewed legacy-data repair workflows |
 | S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
-| S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection with resolve/filter | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
+| S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection built from an abstract `AlertRule` class hierarchy (Pandas/NumPy) with resolve/filter, OpenAI plain-language cost explanations with rule-based fallback, automatic complete-day scenario periods and self-explaining dashboard pages | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
 | Runtime | Docker Compose PostgreSQL, migration/bootstrap jobs, Gunicorn, KRaft Kafka, producer and consumer | Public deployment hardening and operational backup/restore tooling |
 | Accounts | JWT authentication (`/api/auth/token/`), user management API (`/api/accounts/users/`), pre-seeded `admin` account | Per-user granular object-level building ACLs |
 | Frontend | Streamlit dashboard (`frontend/app.py`): JWT login gate, team management, overview, building/meter management, dated scenarios, costs, alerts, reports, forecast, recommendations and feedback | Multi-tenant tenant-isolation styling |
@@ -78,7 +78,7 @@ Arrows show service calls and database access. The Streamlit dashboard runs insi
 │   └── accounts/                 # Scaffold
 ├── frontend/                     # Streamlit dashboard (see frontend/README.md)
 └── docs/                         # Setup, API and measurement documentation
-    ├── uml/                      # S1 OOP class diagram
+    ├── uml/                      # S1 and S3 class diagrams (Mermaid)
     └── presentations/            # Placeholder
 ```
 
@@ -142,6 +142,7 @@ subsystems' routes. The table uses the shared `/api/` convenience prefix. All do
 | S2 | `/api/recommendations/{id}/feedback/` | POST | Store validated feedback (`1–5` rating) for `{id}` |
 | S3 | `/api/tariffs/`, `/api/tariffs/{id}/` | GET, POST; GET, PUT, PATCH | List/create/update validated tariff plans (one active) |
 | S3 | `/api/buildings/{id}/cost/` | GET | Interval-based tariff scenario |
+| S3 | `/api/buildings/{id}/cost/explain/` | POST | Plain-language cost explanation (OpenAI, rule-based fallback) |
 | S3 | `/api/buildings/{id}/scenarios/` | POST | What-if re-pricing (tariff, consumption, solar) |
 | S3 | `/api/buildings/{id}/reports/`, `/api/reports/` | GET, POST; GET | Generate and list stored cost reports |
 | S3 | `/api/alerts/`, `/api/alerts/detect/`, `/api/alerts/{id}/` | GET; POST; GET, PUT, PATCH | List, detect and resolve alerts (only `is_resolved` is writable) |
@@ -188,6 +189,9 @@ an assessment of capstone completeness.
 | Guide | Scope |
 | --- | --- |
 | [S1 architecture and UML](docs/s1-architecture.md) | OOP classes and responsibilities |
+| [S3 architecture and UML](docs/s3-architecture.md) | Alert rules, cost explainer (OpenAI), scenarios, exceptions and API |
+| [S3 requirements](docs/s3-requirements.md) | 10 functional and 10 non-functional requirements |
+| [S3 test results](docs/test-results/s3-test-results.md) | Latest S3 backend and dashboard test run |
 | [Kafka pipeline](docs/kafka.md) | Delivery, outbox, consumer, failures and recovery |
 | [Docker development](docs/docker-development.md) | Private configuration, services, demo setup, logs and persistence |
 | [Host development](docs/host-development.md) | Optional virtual environment and host PostgreSQL setup |
@@ -198,8 +202,11 @@ an assessment of capstone completeness.
 | [Reading ingestion](docs/reading-ingestion.md) | Single-reading validation, retries and transactions |
 | [Simulated telemetry](docs/simulated-telemetry.md) | Inventory rules, synthetic profile and scheduling |
 
-## Historical coursework resource
+## Demo video and presentation
 
-[Assignment 3 API demonstration video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
-is retained as a historical resource, not a verified current capstone demo.
+- Capstone screencast (7 min): **TODO: paste the link here before submitting**
+- Final presentation: `docs/presentations/` (TODO: add the file)
+- Earlier coursework: [Assignment 3 API demonstration video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
+  (historical, not the current capstone demo)
+
 [Project repository](https://github.com/Techrifat97/AI-Powered-Smart-Energy-Management-System).
