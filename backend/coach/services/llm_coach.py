@@ -118,7 +118,6 @@ class SustainabilityCoachService:
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key)
 
-                # Prepare concise prompt context
                 prompt_context = {
                     'building_name': building.name,
                     'area_sqm': building.area_sqm,
@@ -184,7 +183,6 @@ class SustainabilityCoachService:
                 target_savings_pct=target_savings_pct
             )
 
-        # Log LLM Telemetry
         LLMRequestLog.objects.create(
             model_name=model_name if source_used == 'OPENAI' else 'rule-based-engine',
             prompt_tokens=tokens_info['prompt_tokens'],
@@ -195,7 +193,6 @@ class SustainabilityCoachService:
             error_message=error_msg
         )
 
-        # Persist recommendations to database
         saved_recs = []
         for r in recommendations_data:
             obj = AIRecommendation.objects.create(

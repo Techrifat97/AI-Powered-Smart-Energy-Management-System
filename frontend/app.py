@@ -372,7 +372,6 @@ def meter_management():
                 "Add missing meters at the bottom of the page.",
                 "Switch a meter on or off with its button. Switching a main or solar meter off pauses measurements."])
 
-    # Get meters for the selected building
     data, err = all_rows(f"/buildings/{building_id}/meters/")
 
     if show(err):
@@ -428,7 +427,6 @@ def meter_management():
 
     st.divider()
 
-    # Add a new meter
     st.subheader("Add New Meter")
 
     with st.form("add_meter_form"):
@@ -492,7 +490,6 @@ def team_management():
 
     st.subheader(f"Team Members ({len(users)})")
     if users:
-        # Table header row
         h1, h2, h3, h4 = st.columns([3, 3, 2, 2])
         h1.caption("**MEMBER**")
         h2.caption("**CONTACT & JOINED**")
