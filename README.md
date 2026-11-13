@@ -276,19 +276,8 @@ and scope. [S3 test results](docs/test-results/s3-test-results.md)
 | Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability Analysis & AI Coach |
 | Marwan Ahmed | 7226233 | MDT | S3 — Energy Costs, Scenarios & Alerts |
 
-The repository retains the earlier Assignment 3 demonstration video. The current
-capstone screencast link and final presentation file remain submission items for
-the team to supply. The presentations directory is currently a placeholder.
-[Earlier coursework video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
 
-## Limitations
+## Video Presentation
 
-Forecast bands and sustainability scores are heuristic. Carbon uses a fixed factor.
-Pricing uses one global tariff and a no-battery interval estimate. Taxes, fixed fees
-and contract history are unmodeled. Recommendation feedback is stored without a
-learning pipeline.
+[Watch the Demonstration Video]()
 
-Kafka runs as a single broker. Unknown historical durations and incomplete coverage
-can make calculations unavailable. Activation and installation timelines have no
-dedicated data model. The current application targets local development and
-university demonstrations.
