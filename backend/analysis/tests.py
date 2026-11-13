@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
@@ -12,6 +13,9 @@ from analysis.services.alerts import detect_alerts
 class AnalysisAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='analysis_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(
             name="Test Analysis Complex",
             location="Zone B",
@@ -41,6 +45,9 @@ class AnalysisAPITests(TestCase):
 class TariffValidationTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='tariff_user', password='password123')
+        self.client.force_authenticate(user=self.user)
 
     def payload(self, **overrides):
         data = {'name': 'Flat', 'rate_standard_eur_per_kwh': 0.3, 'rate_peak_eur_per_kwh': 0.3,
@@ -84,6 +91,9 @@ class TariffValidationTests(TestCase):
 class AlertDetectionTests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='alert_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(name='Alert lab', baseline_kwh_per_day=10.0)
         self.meter = Meter.objects.create(building=self.building, device_id='ALERT-MAIN',
                                           meter_type='ELECTRICITY')
@@ -163,6 +173,9 @@ class ReportAndScenarioTests(TestCase):
 
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='report_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(name='Report lab', baseline_kwh_per_day=100.0)
         main = Meter.objects.create(building=self.building, device_id='REP-MAIN', meter_type='ELECTRICITY')
         solar = Meter.objects.create(building=self.building, device_id='REP-SOLAR', meter_type='SOLAR')

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -10,6 +11,10 @@ from monitoring.services.aggregation import summarize_building
 
 class BuildingAggregationTests(TestCase):
     def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(username='agg_user', password='password123')
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(name='Energy lab', baseline_kwh_per_day=250)
         self.timestamp = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
         self.meters = {
@@ -151,7 +156,7 @@ class BuildingAggregationTests(TestCase):
         self.assertEqual(summary['main_meter_count'], 2)
         self.assertEqual(summary['main_readings_count'], 2)
         self.assertEqual(summary['total_solar_generated_kwh'], 30)
-        response = APIClient().get(reverse('building-summary', args=[self.building.pk]))
+        response = self.client.get(reverse('building-summary', args=[self.building.pk]))
         self.assertEqual(response.status_code, 200)
         self.assert_main_unavailable(response.data, ambiguous=True)
 
@@ -261,7 +266,7 @@ class BuildingAggregationTests(TestCase):
         self.add_reading('LIGHTING', 20, 80)
         self.add_reading('SOLAR', 30, 500)
 
-        response = APIClient().get(reverse('building-summary', args=[self.building.pk]))
+        response = self.client.get(reverse('building-summary', args=[self.building.pk]))
 
         self.assertEqual(response.status_code, 200)
         existing_keys = {
@@ -279,7 +284,7 @@ class BuildingAggregationTests(TestCase):
         self.assertEqual(response.data['main_readings_count'], 1)
 
     def test_endpoint_distinguishes_missing_from_zero_and_keeps_404(self):
-        client = APIClient()
+        client = self.client
         url = reverse('building-summary', args=[self.building.pk])
         missing = client.get(url)
         self.assertEqual(missing.status_code, 200)

@@ -5,10 +5,11 @@ from datetime import datetime, timedelta, timezone
 import json
 from threading import Barrier
 
+from django.contrib.auth import get_user_model
 from django.db import close_old_connections, connection, connections
 from django.test import TestCase, TransactionTestCase
 from django.urls import resolve, reverse
-from rest_framework.test import APIClient, APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from monitoring.models import Building, EnergyReading, Meter
 from monitoring.services.generator import generate_minute
@@ -17,6 +18,9 @@ from monitoring.services.generator import generate_minute
 class ManagementAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='mgmt_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(name='API lab', has_solar_installation=False)
         self.solar_building = Building.objects.create(name='PV lab', has_solar_installation=True)
         self.minute = datetime(2026, 11, 9, 12, tzinfo=timezone.utc)
@@ -219,6 +223,9 @@ class ManagementAPITests(TestCase):
 class ReadingHistoryAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='history_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(name='History lab', has_solar_installation=False)
         self.main = Meter.objects.create(building=self.building, device_id='HISTORY-MAIN', is_active=False)
         self.sub = Meter.objects.create(building=self.building, device_id='HISTORY-HVAC', meter_type='HVAC')
@@ -313,6 +320,8 @@ class InventoryConcurrencyAPITests(TransactionTestCase):
 
     def setUp(self):
         self.assertEqual(connection.vendor, 'postgresql')
+        User = get_user_model()
+        self.user = User.objects.create_user(username='concur_user', password='password123')
         self.building = Building.objects.create(name='Concurrent lab', has_solar_installation=True)
         self.other = Building.objects.create(name='Other lab', has_solar_installation=False)
         self.minute = datetime(2026, 11, 9, 12, tzinfo=timezone.utc)
@@ -321,6 +330,7 @@ class InventoryConcurrencyAPITests(TransactionTestCase):
         # APIRequestFactory avoids request middleware closing the connection on
         # which this worker just installed bounded PostgreSQL timeouts.
         request = APIRequestFactory().generic(method, url, json.dumps(data), content_type='application/json')
+        force_authenticate(request, user=self.user)
         route = resolve(url)
         return route.func(request, **route.kwargs)
 
