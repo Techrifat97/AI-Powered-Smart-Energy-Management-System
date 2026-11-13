@@ -57,7 +57,7 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/buildings/', timeout=3).close()"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health/', timeout=3).close()"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -131,7 +131,7 @@ services:
   frontend:
     <<: *app
     restart: unless-stopped
-    command: ["streamlit", "run", "frontend/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    command: ["streamlit", "run", "frontend/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--server.headless", "true", "--browser.gatherUsageStats", "false", "--theme.base", "light"]
     ports:
       - "${FRONTEND_PORT:-8501}:8501"
     depends_on:

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone as datetime_timezone
 from io import StringIO
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
@@ -16,6 +17,9 @@ from django.utils import timezone
 class MonitoringAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='monitoring_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(
             name="Test Science Hall",
             location="Building 4",

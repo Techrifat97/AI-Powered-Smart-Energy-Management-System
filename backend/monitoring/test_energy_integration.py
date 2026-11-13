@@ -26,6 +26,10 @@ class EnergyIntegrationTests(TestCase):
         self.solar = Meter.objects.create(building=self.building, device_id='PV', meter_type='SOLAR')
         self.start = datetime(2026, 1, 1, 12, tzinfo=timezone.utc)
         self.client = APIClient()
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.user = User.objects.create_user(username='integration_user', password='password123')
+        self.client.force_authenticate(user=self.user)
 
     def reading(self, meter, energy, start=None, duration=3600, power=3):
         return EnergyReading.objects.create(meter=meter, timestamp=start or self.start,

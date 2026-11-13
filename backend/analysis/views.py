@@ -2,6 +2,7 @@ from rest_framework.generics import ListCreateAPIView, RetrieveUpdateAPIView, Li
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 
 from monitoring.models import Building
@@ -22,6 +23,7 @@ class TariffPlanListCreateView(ListCreateAPIView):
     """
     queryset = TariffPlan.objects.all()
     serializer_class = TariffPlanSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class TariffPlanDetailView(RetrieveUpdateAPIView):
@@ -30,6 +32,7 @@ class TariffPlanDetailView(RetrieveUpdateAPIView):
     """
     queryset = TariffPlan.objects.all()
     serializer_class = TariffPlanSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class EnergyAlertListView(ListAPIView):
@@ -37,6 +40,7 @@ class EnergyAlertListView(ListAPIView):
     List stored alerts, optionally filtered by building; no detection runs here.
     """
     serializer_class = EnergyAlertSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = EnergyAlert.objects.all()
@@ -57,6 +61,7 @@ class EnergyAlertDetectView(APIView):
     """
     Run rule-based detection for a building and store newly found alerts.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
@@ -77,12 +82,14 @@ class EnergyAlertDetailView(RetrieveUpdateAPIView):
     """
     queryset = EnergyAlert.objects.all()
     serializer_class = EnergyAlertSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class BuildingCostAnalysisAPIView(APIView):
     """
     Return tariff scenario estimates from shared S1 intervals; not a utility bill.
     """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, building_id):
         building = get_object_or_404(Building, id=building_id)
@@ -93,6 +100,7 @@ class BuildingScenarioAPIView(APIView):
     """
     Re-price recorded history under an alternative tariff, consumption or solar change.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, building_id):
         building = get_object_or_404(Building, id=building_id)
@@ -110,6 +118,7 @@ class BuildingCostReportView(APIView):
     """
     GET stored cost reports of a building; POST generates one for an inclusive UTC date range.
     """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, building_id):
         get_object_or_404(Building, id=building_id)
@@ -133,6 +142,7 @@ class CostReportListView(ListAPIView):
     List stored cost reports, optionally filtered by building.
     """
     serializer_class = CostReportSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = CostReport.objects.all()

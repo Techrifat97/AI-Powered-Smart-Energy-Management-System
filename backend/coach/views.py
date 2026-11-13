@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, CreateAPIView
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from monitoring.models import Building
@@ -25,6 +26,7 @@ class BuildingForecastAPIView(APIView):
     Calculate and store seven daily heuristic forecasts using shared S1 data.
     Bands are illustrative; availability depends on complete UTC-day coverage.
     """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, building_id):
         building = get_object_or_404(Building, id=building_id)
@@ -55,6 +57,7 @@ class GenerateRecommendationsAPIView(APIView):
     otherwise the response reports unavailable inputs. Energy goals are
     illustrative scenarios and monetary recommendation savings are unavailable.
     """
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         input_serializer = GenerateRecommendationInputSerializer(data=request.data)
@@ -138,6 +141,7 @@ class RecommendationListView(ListAPIView):
     List all generated recommendations, optionally filtered by building_id.
     """
     serializer_class = AIRecommendationSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = AIRecommendation.objects.all()
@@ -157,10 +161,15 @@ class RecommendationFeedbackCreateView(CreateAPIView):
     """
     queryset = RecommendationFeedback.objects.all()
     serializer_class = RecommendationFeedbackSerializer
+    permission_classes = [IsAuthenticated]
 
     def create(self, request, *args, **kwargs):
         self.recommendation = get_object_or_404(AIRecommendation, pk=self.kwargs['pk'])
         return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        user = self.request.user if self.request.user.is_authenticated else None
+        serializer.save(user=user)
 
     def get_serializer_context(self):
         context = super().get_serializer_context()

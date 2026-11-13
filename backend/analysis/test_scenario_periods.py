@@ -1,5 +1,6 @@
 """Inclusive UTC scenario windows retain existing quality checks."""
 from datetime import timedelta
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -13,6 +14,9 @@ class ScenarioPeriodTests(TestCase):
         self.building=Building.objects.get(pk=self.result['building_id'])
         self.url=f'/api/buildings/{self.building.pk}/scenarios/'
         self.client=APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='scenario_user', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.body={k:self.result[k] for k in ('period_start','period_end')}
 
     def test_complete_history_still_works_after_live_gap(self):

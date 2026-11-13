@@ -1,4 +1,5 @@
 from datetime import timedelta, timezone as datetime_timezone
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from unittest.mock import patch
@@ -15,6 +16,9 @@ from coach.serializers import RecommendationFeedbackSerializer
 class CoachAPITests(TestCase):
     def setUp(self):
         self.client = APIClient()
+        User = get_user_model()
+        self.user = User.objects.create_user(username='coach_testuser', password='password123')
+        self.client.force_authenticate(user=self.user)
         self.building = Building.objects.create(
             name="Test Engineering Lab",
             location="Room E101",
@@ -143,3 +147,8 @@ class CoachAPITests(TestCase):
         serializer = RecommendationFeedbackSerializer(data={'rating': 4})
         self.assertFalse(serializer.is_valid())
         self.assertIn('recommendation', serializer.errors)
+
+    def test_unauthenticated_request_is_rejected(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.get(reverse('recommendation-list'))
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

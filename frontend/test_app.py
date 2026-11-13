@@ -9,10 +9,13 @@ APP=Path(__file__).with_name('app.py')
 
 class DashboardTests(TestCase):
     def setUp(self):
+        import streamlit as st
+        st.cache_resource.clear()
         self.buildings=[]
         self.meters=[]
+        self.users=[{'id':1,'username':'admin','email':'admin@test.com','is_staff':True,'date_joined':'2026-01-01'}]
         self.posts=[]
-        self.fail=False
+        self.simulate_api_error=False
         self.mock=patch('requests.request',side_effect=self.request)
         self.mock.start();self.addCleanup(self.mock.stop)
 
@@ -20,22 +23,35 @@ class DashboardTests(TestCase):
         response=Mock();response.status_code=200
         if method=='POST':
             self.posts.append((url,kwargs['json']))
-            if self.fail:
+            if self.simulate_api_error:
                 response.status_code=400;data={'device_id':['Already exists.']}
+            elif url.endswith('/auth/token/'):
+                data={'access':'jwt-test-access-token','refresh':'jwt-test-refresh-token'}
             elif url.endswith('/buildings/'):
                 data=dict(id=2,meters=[],**kwargs['json']);self.buildings.append(data)
             elif url.endswith('/scenarios/'):
                 data={'available':False,'reason':'coverage_incomplete'}
+            elif url.endswith('/accounts/users/'):
+                data=dict(id=2,**kwargs['json'])
             else:
-                data=dict(id=2,meter_type_display=kwargs['json']['meter_type'],**kwargs['json'])
+                data=dict(id=2,meter_type_display=kwargs['json'].get('meter_type', ''),**kwargs['json'])
                 self.meters.append(data)
         elif method=='PATCH':
             self.posts.append((url,kwargs['json']));data={}
             self.meters[0].update(kwargs['json'])
+        elif method=='DELETE':
+            self.posts.append((url,{}))
+            response.status_code=204
+            response.json.side_effect=ValueError("No JSON")
+            return response
+        elif url.endswith('/accounts/me/'):
+            data={'id':1,'username':'admin','email':'admin@test.com','is_staff':True}
         elif url.endswith('/buildings/'):
             data={'results':self.buildings,'next':None}
         elif url.endswith('/meters/'):
             data={'results':self.meters,'next':None}
+        elif url.endswith('/accounts/users/'):
+            data={'results':self.users,'next':None}
         elif url.endswith('/summary/'):
             data={'total_consumption_kwh':None,'total_solar_generated_kwh':None,'peak_demand_kw':None,
                   'total_readings_count':0,'main_data_available':False,'main_data_reason':'no_readings',
@@ -45,10 +61,58 @@ class DashboardTests(TestCase):
         return response
 
     def app(self,page):
-        app=AppTest.from_file(str(APP)).run()
-        app.sidebar.radio[0].set_value(page).run()
+        app=AppTest.from_file(str(APP))
+        app.session_state['auth_token']='mock-jwt-token'
+        app.session_state['auth_user']={'username':'testadmin'}
+        app.run()
+        if page and page != "Overview":
+            target_hash = [h for h, info in app._registered_pages.items() if info['page_name'] == page][0]
+            app._page_hash = target_hash
+            app.run()
         self.assertFalse(app.exception)
         return app
+
+    def test_unauthenticated_session_shows_login_screen(self):
+        app=AppTest.from_file(str(APP)).run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('Smart Energy' in str(t.value) for t in app.title))
+        self.assertEqual(len(app.form), 1)
+        self.assertEqual(len(app.text_input), 2)
+
+    def test_session_restored_from_query_params_on_page_reload(self):
+        app = AppTest.from_file(str(APP)).run()
+        app.text_input[0].set_value('admin')
+        app.text_input[1].set_value('admin123')
+        next(b for b in app.button if b.label == 'Log In').click().run()
+        self.assertFalse(app.exception)
+        sid = app.query_params.get('sid')
+        self.assertTrue(sid)
+        token = app.session_state.get('auth_token')
+        self.assertTrue(token)
+
+        reloaded_app = AppTest.from_file(str(APP))
+        reloaded_app.query_params['sid'] = sid
+        reloaded_app.run()
+        self.assertFalse(reloaded_app.exception)
+        self.assertEqual(reloaded_app.session_state.get('auth_token'), token)
+        self.assertEqual(len(reloaded_app.form), 0)
+        self.assertTrue(any(b.label == 'Log out' for b in reloaded_app.button))
+
+    def test_session_restored_on_tab_reload_even_without_query_params(self):
+        app = AppTest.from_file(str(APP)).run()
+        app.text_input[0].set_value('admin')
+        app.text_input[1].set_value('admin123')
+        next(b for b in app.button if b.label == 'Log In').click().run()
+        self.assertFalse(app.exception)
+        token = app.session_state.get('auth_token')
+
+        # Simulate F5 on tabbed page without sid in URL
+        tab_reloaded_app = AppTest.from_file(str(APP))
+        tab_reloaded_app.run()
+        self.assertFalse(tab_reloaded_app.exception)
+        self.assertEqual(tab_reloaded_app.session_state.get('auth_token'), token)
+        self.assertEqual(len(tab_reloaded_app.form), 0)
+        self.assertTrue(any(b.label == 'Log out' for b in tab_reloaded_app.button))
 
     def inventory(self):
         self.buildings=[dict(id=1,name='Renamed building',location='Campus',area_sqm=1000,
@@ -77,7 +141,7 @@ class DashboardTests(TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(self.posts[-1][1]['device_id'],'MAIN-001')
         self.assertFalse(self.posts[-1][1]['is_active'])
-        self.fail=True
+        self.simulate_api_error=True
         app.text_input[0].set_value('MAIN-001')
         next(b for b in app.button if b.label=='Add Meter').click().run()
         self.assertTrue(app.error)
@@ -113,3 +177,29 @@ class DashboardTests(TestCase):
         app=self.app('Building Management')
         self.assertEqual(len(app.sidebar.selectbox[0].options),2)
         self.assertNotEqual(*app.sidebar.selectbox[0].options)
+
+    def test_team_management_lists_members_and_adds_member(self):
+        app=self.app('Team Management')
+        self.assertFalse(app.exception)
+        app.text_input[0].set_value('prof_evaluator')
+        app.text_input[1].set_value('prof@fh.de')
+        app.text_input[2].set_value('temp_pass_123')
+        app.text_input[3].set_value('Prof')
+        next(b for b in app.button if b.label=='Add Member').click().run()
+        self.assertFalse(app.exception)
+        self.assertEqual(self.posts[-1][1]['username'],'prof_evaluator')
+        self.assertEqual(self.posts[-1][1]['password'],'temp_pass_123')
+
+    def test_team_management_deletes_member_with_confirmation(self):
+        self.users.append({'id':2,'username':'colleague','email':'c@test.com','is_staff':False,'date_joined':'2026-01-01'})
+        app=self.app('Team Management')
+        app.session_state['auth_user']={'username':'admin'}
+        app.run()
+        self.assertFalse(app.exception)
+        del_btn = next(b for b in app.button if b.label=='Delete')
+        del_btn.click().run()
+        self.assertFalse(app.exception)
+        yes_btn = next(b for b in app.button if b.label=='Yes')
+        yes_btn.click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('/accounts/users/2/' in p[0] for p in self.posts))

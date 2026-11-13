@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView, ListCreateAPIView, RetrieveUpdateAPIView
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from .models import Building, Meter, EnergyReading
 from .services.aggregation import summarize_building
@@ -16,12 +17,23 @@ from .serializers import (
 )
 
 
+class HealthCheckView(APIView):
+    """
+    Public health check endpoint for container orchestrators and ping probes.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'status': 'healthy'}, status=status.HTTP_200_OK)
+
+
 class BuildingListView(ListCreateAPIView):
     """
     List or create buildings with validated inventory metadata.
     """
     queryset = Building.objects.all().prefetch_related('meters')
     serializer_class = BuildingSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class BuildingDetailView(RetrieveUpdateAPIView):
@@ -30,10 +42,12 @@ class BuildingDetailView(RetrieveUpdateAPIView):
     """
     queryset = Building.objects.all().prefetch_related('meters')
     serializer_class = BuildingSerializer
+    permission_classes = [IsAuthenticated]
 
 
 class BuildingMeterListView(ListCreateAPIView):
     serializer_class = MeterSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         building = get_object_or_404(Building, pk=self.kwargs['building_id'])
@@ -46,6 +60,7 @@ class BuildingMeterListView(ListCreateAPIView):
 class MeterDetailView(RetrieveUpdateAPIView):
     queryset = Meter.objects.all()
     serializer_class = MeterSerializer
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'patch', 'head', 'options']
 
 
@@ -58,6 +73,7 @@ class ReadingHistoryPagination(PageNumberPagination):
 class BuildingReadingHistoryView(ListAPIView):
     serializer_class = EnergyReadingSerializer
     pagination_class = ReadingHistoryPagination
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         building = get_object_or_404(Building, pk=self.kwargs['building_id'])
@@ -83,6 +99,7 @@ class BuildingSummaryAPIView(APIView):
     The Python service supports optional time windows; the HTTP endpoint
     summarizes all stored history.
     """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, building_id):
         building = get_object_or_404(Building, id=building_id)
