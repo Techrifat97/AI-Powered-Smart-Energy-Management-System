@@ -22,15 +22,23 @@ st.set_page_config(page_title="Smart Energy Dashboard", page_icon=":zap:", layou
 
 
 def call(method, path, **kwargs):
-    """Return (data, error). Never raises, so the page can show a friendly message."""
+    """Return (data, error). Automatically attaches JWT Bearer token if session exists."""
+    headers = kwargs.pop("headers", {}) or {}
+    token = st.session_state.get("auth_token")
+    if token and "Authorization" not in headers:
+        headers["Authorization"] = f"Bearer {token}"
     try:
-        response = requests.request(method, f"{API}{path}", timeout=15, **kwargs)
+        response = requests.request(method, f"{API}{path}", timeout=15, headers=headers, **kwargs)
     except requests.RequestException as error:
         return None, f"API not reachable at {API}: {error}"
     try:
         data = response.json()
     except ValueError:
         data = None
+    if response.status_code == 401 and not path.startswith("/auth/"):
+        st.session_state.pop("auth_token", None)
+        st.session_state.pop("auth_user", None)
+        st.rerun()
     if response.status_code >= 400:
         return data, f"HTTP {response.status_code}: {data}"
     return data, None
@@ -65,8 +73,48 @@ def all_rows(path):
         params = parse_qs(urlsplit(next_url).query)
 
 
+def login_screen():
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.title(":zap: Smart Energy")
+        st.subheader("Login")
+        st.write("Please authenticate with your credentials to access the dashboard.")
+        with st.form("login_form"):
+            username = st.text_input("Username", value="admin")
+            password = st.text_input("Password", type="password", value="admin123")
+            submit = st.form_submit_button("Log In", use_container_width=True)
+            if submit:
+                if not username or not password:
+                    st.error("Please enter both username and password.")
+                else:
+                    data, err = call("POST", "/auth/token/", json={"username": username, "password": password})
+                    if err:
+                        st.error("Authentication failed: Invalid credentials.")
+                    elif data and "access" in data:
+                        st.session_state["auth_token"] = data["access"]
+                        profile, _ = call("GET", "/accounts/me/")
+                        st.session_state["auth_user"] = profile or {"username": username}
+                        st.success("Authenticated successfully!")
+                        st.rerun()
+        st.caption("Default evaluator credentials: `admin` / `admin123`")
+
+
+# Authentication gate
+if "auth_token" not in st.session_state:
+    login_screen()
+    st.stop()
+
+
 # --- sidebar ---------------------------------------------------------------
 st.sidebar.title("Smart Energy")
+user = st.session_state.get("auth_user", {})
+username = user.get("username", "admin") if isinstance(user, dict) else "admin"
+st.sidebar.caption(f":bust_in_silhouette: Logged in as: **{username}**")
+if st.sidebar.button("Log out", key="logout_btn", use_container_width=True):
+    st.session_state.pop("auth_token", None)
+    st.session_state.pop("auth_user", None)
+    st.rerun()
+st.sidebar.divider()
 buildings, err = all_rows("/buildings/")
 show(err)
 options = {f"{b['name']} (#{b['id']})": b["id"] for b in buildings}

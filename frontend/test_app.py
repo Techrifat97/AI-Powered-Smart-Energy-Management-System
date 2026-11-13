@@ -45,10 +45,19 @@ class DashboardTests(TestCase):
         return response
 
     def app(self,page):
-        app=AppTest.from_file(str(APP)).run()
+        app=AppTest.from_file(str(APP))
+        app.session_state['auth_token']='mock-jwt-token'
+        app.session_state['auth_user']={'username':'testadmin'}
+        app.run()
         app.sidebar.radio[0].set_value(page).run()
         self.assertFalse(app.exception)
         return app
+
+    def test_unauthenticated_session_shows_login_screen(self):
+        app=AppTest.from_file(str(APP)).run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('Login' in str(s.value) for s in app.subheader))
+        self.assertEqual(len(app.form),1)
 
     def inventory(self):
         self.buildings=[dict(id=1,name='Renamed building',location='Campus',area_sqm=1000,
