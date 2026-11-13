@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.views import APIView
-from rest_framework.generics import ListAPIView, CreateAPIView
+from rest_framework.generics import ListAPIView, ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -144,7 +144,7 @@ class RecommendationListView(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = AIRecommendation.objects.all()
+        queryset = AIRecommendation.objects.prefetch_related('feedback__user').all()
         building_id = self.request.query_params.get('building_id')
         if building_id:
             try:
@@ -155,13 +155,16 @@ class RecommendationListView(ListAPIView):
         return queryset
 
 
-class RecommendationFeedbackCreateView(CreateAPIView):
+class RecommendationFeedbackCreateView(ListCreateAPIView):
     """
-    Store submitted feedback bound to the recommendation referenced in the URL.
+    List or store submitted feedback bound to the recommendation referenced in the URL.
     """
-    queryset = RecommendationFeedback.objects.all()
     serializer_class = RecommendationFeedbackSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        self.recommendation = get_object_or_404(AIRecommendation, pk=self.kwargs['pk'])
+        return RecommendationFeedback.objects.filter(recommendation=self.recommendation).select_related('user')
 
     def create(self, request, *args, **kwargs):
         self.recommendation = get_object_or_404(AIRecommendation, pk=self.kwargs['pk'])

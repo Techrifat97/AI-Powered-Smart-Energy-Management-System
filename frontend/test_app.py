@@ -19,6 +19,7 @@ class DashboardTests(TestCase):
         self.tariffs=[]
         self.cost=None
         self.alerts=[]
+        self.recommendations=[]
         self.scenario_result={'available':False,'reason':'coverage_incomplete'}
         self.simulate_api_error=False
         self.mock=patch('requests.request',side_effect=self.request)
@@ -41,6 +42,14 @@ class DashboardTests(TestCase):
                 data=self.scenario_result
             elif url.endswith('/accounts/users/'):
                 data=dict(id=2,**kwargs['json'])
+            elif url.endswith('/feedback/'):
+                rec_id=int(url.rstrip('/').split('/')[-2])
+                fb=dict(id=len(self.posts),recommendation=rec_id,user_username='testadmin',
+                        created_at='2026-11-13T12:00:00Z',**kwargs['json'])
+                for r in self.recommendations:
+                    if r['id']==rec_id:
+                        r.setdefault('feedback',[]).insert(0,fb)
+                data=fb
             else:
                 data=dict(id=2,meter_type_display=kwargs['json'].get('meter_type', ''),**kwargs['json'])
                 self.meters.append(data)
@@ -66,6 +75,8 @@ class DashboardTests(TestCase):
             data=self.cost
         elif url.endswith('/alerts/'):
             data={'results':self.alerts,'next':None}
+        elif url.endswith('/recommendations/'):
+            data={'results':self.recommendations,'next':None}
         elif url.endswith('/summary/'):
             data={'total_consumption_kwh':None,'total_solar_generated_kwh':None,'peak_demand_kw':None,
                   'total_readings_count':0,'main_data_available':False,'main_data_reason':'no_readings',
@@ -306,3 +317,33 @@ class DashboardTests(TestCase):
         yes_btn.click().run()
         self.assertFalse(app.exception)
         self.assertTrue(any('/accounts/users/2/' in p[0] for p in self.posts))
+
+    def test_recommendations_displays_multiple_feedbacks_and_stores_new_feedback(self):
+        self.inventory()
+        self.recommendations=[{
+            'id':10,'building':1,'title':'Shift EV Charging','category':'PEAK_SHAVING',
+            'category_display':'Peak Shaving','priority':'HIGH','priority_display':'High Priority',
+            'suggested_action':'Schedule charging after 22:00 UTC.','estimated_savings_kwh':45.0,
+            'estimated_savings_eur':None,'confidence_score':0.9,'source':'RULE_BASED','status':'PENDING',
+            'feedback':[
+                {'id':1,'recommendation':10,'user':1,'user_username':'admin','rating':5,
+                 'is_accepted':True,'comment':'Already tested on fleetcharger 1.','created_at':'2026-11-13T10:00:00Z'},
+                {'id':2,'recommendation':10,'user':2,'user_username':'yasoob','rating':4,
+                 'is_accepted':True,'comment':'Good idea for weekday evenings.','created_at':'2026-11-13T09:30:00Z'},
+            ]
+        }]
+        app=self.app('Recommendations')
+        self.assertFalse(app.exception)
+        self.assertTrue(any('admin' in m.value and '5/5' in m.value for m in app.markdown))
+        self.assertTrue(any('yasoob' in m.value and '4/5' in m.value for m in app.markdown))
+        self.assertTrue(any('Already tested on fleetcharger 1.' in m.value for m in app.markdown))
+        self.assertTrue(any('Good idea for weekday evenings.' in m.value for m in app.markdown))
+
+        app.text_input(key='com10').set_value('Works great on weekends too!')
+        next(b for b in app.button if b.label=='Send feedback').click().run()
+        self.assertFalse(app.exception)
+        self.assertTrue(any('Feedback stored.' in s.value for s in app.success))
+        self.assertTrue(any('testadmin' in m.value for m in app.markdown))
+        self.assertTrue(any('Works great on weekends too!' in m.value for m in app.markdown))
+        self.assertEqual(len(app.form), 0)
+        self.assertTrue(any('already submitted feedback' in c.value for c in app.caption))
