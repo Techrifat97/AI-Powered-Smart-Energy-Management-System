@@ -80,7 +80,7 @@ Existing tariff records and rates are preserved. Later restarts do not reactivat
 a tariff the user has deactivated; multiple active tariffs are reported without repair.
 
 `DemoDataset.key=capstone-demo-v1` records stable identity. Before that marker exists,
-the four reserved `DOCKER-DEMO-*` device IDs recognize renamed inventory. Names are
+the four reserved `DO-SON-*` device IDs recognize renamed inventory. Names are
 never reset. Repeated bootstrap leaves records unchanged, including user meter status,
 forecasts and recommendations. Existing dedicated readings without a marker are
 adopted **without backfill**. Conflicting device IDs/inventory are reported and skipped;

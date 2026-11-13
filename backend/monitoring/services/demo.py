@@ -8,9 +8,11 @@ from django.utils import timezone
 from monitoring.models import Building, Meter, EnergyReading, DemoDataset
 from monitoring.services.inventory import save_building, save_meter
 
-DEMO_NAME = 'Docker demo'
-SPECS = {'DOCKER-DEMO-MAIN': 'ELECTRICITY', 'DOCKER-DEMO-HVAC': 'HVAC',
-         'DOCKER-DEMO-LIGHTING': 'LIGHTING', 'DOCKER-DEMO-SOLAR': 'SOLAR'}
+DEMO_NAME = 'Campus Sonnenstraße Dortmund'
+DEMO_DETAILS = dict(location='Sonnenstraße 96, 44139 Dortmund, Germany', area_sqm=4200.0,
+                    baseline_kwh_per_day=900.0)
+SPECS = {'DO-SON-MAIN': 'ELECTRICITY', 'DO-SON-HVAC': 'HVAC',
+         'DO-SON-LIGHTING': 'LIGHTING', 'DO-SON-SOLAR': 'SOLAR'}
 DATASET_KEY = 'capstone-demo-v1'
 
 
@@ -35,11 +37,11 @@ def ensure_inventory():
     else:
         matches = list(Building.objects.select_for_update().filter(name=DEMO_NAME))
         if len(matches) > 1:
-            raise ValidationError('Multiple Docker demo buildings exist; review inventory.')
+            raise ValidationError('Multiple demo buildings exist; review inventory.')
         if matches:
             building = matches[0]
         else:
-            building = save_building(dict(name=DEMO_NAME, has_solar_installation=True))
+            building = save_building(dict(name=DEMO_NAME, has_solar_installation=True, **DEMO_DETAILS))
             for device_id, kind in SPECS.items():
                 save_meter(dict(device_id=device_id, meter_type=kind), building_id=building.pk)
             return building, True
@@ -47,7 +49,7 @@ def ensure_inventory():
     if (building.has_solar_installation is not True
             or {m.device_id: m.meter_type for m in meters} != SPECS
             or any(not m.is_active or m.unit != 'kWh' for m in meters)):
-        raise ValidationError('Existing Docker demo inventory is incompatible; nothing was changed.')
+        raise ValidationError('Existing demo inventory is incompatible; nothing was changed.')
     return building, False
 
 
@@ -131,7 +133,7 @@ def _ensure_demo_tariff():
     active_count = TariffPlan.objects.filter(is_active=True).count()
     if active_count:
         return 'preserved_active_tariff' if active_count == 1 else 'ambiguous_existing_active_tariffs'
-    TariffPlan.objects.create(name='Synthetic demo flat tariff', rate_standard_eur_per_kwh=.30,
+    TariffPlan.objects.create(name='Gewerbestrom Standard (Dortmund)', rate_standard_eur_per_kwh=.30,
                               rate_peak_eur_per_kwh=.30, solar_feed_in_eur_per_kwh=.08)
     return 'created_demo_tariff'
 
