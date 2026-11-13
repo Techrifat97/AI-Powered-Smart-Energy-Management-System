@@ -13,7 +13,7 @@ class DashboardTests(TestCase):
         self.meters=[]
         self.users=[{'id':1,'username':'admin','email':'admin@test.com','is_staff':True,'date_joined':'2026-01-01'}]
         self.posts=[]
-        self.fail=False
+        self.simulate_api_error=False
         self.mock=patch('requests.request',side_effect=self.request)
         self.mock.start();self.addCleanup(self.mock.stop)
 
@@ -21,8 +21,10 @@ class DashboardTests(TestCase):
         response=Mock();response.status_code=200
         if method=='POST':
             self.posts.append((url,kwargs['json']))
-            if self.fail:
+            if self.simulate_api_error:
                 response.status_code=400;data={'device_id':['Already exists.']}
+            elif url.endswith('/auth/token/'):
+                data={'access':'jwt-test-access-token','refresh':'jwt-test-refresh-token'}
             elif url.endswith('/buildings/'):
                 data=dict(id=2,meters=[],**kwargs['json']);self.buildings.append(data)
             elif url.endswith('/scenarios/'):
@@ -40,6 +42,8 @@ class DashboardTests(TestCase):
             response.status_code=204
             response.json.side_effect=ValueError("No JSON")
             return response
+        elif url.endswith('/accounts/me/'):
+            data={'id':1,'username':'admin','email':'admin@test.com','is_staff':True}
         elif url.endswith('/buildings/'):
             data={'results':self.buildings,'next':None}
         elif url.endswith('/meters/'):
@@ -59,15 +63,38 @@ class DashboardTests(TestCase):
         app.session_state['auth_token']='mock-jwt-token'
         app.session_state['auth_user']={'username':'testadmin'}
         app.run()
-        app.sidebar.radio[0].set_value(page).run()
+        if page and page != "Overview":
+            target_hash = [h for h, info in app._registered_pages.items() if info['page_name'] == page][0]
+            app._page_hash = target_hash
+            app.run()
         self.assertFalse(app.exception)
         return app
 
     def test_unauthenticated_session_shows_login_screen(self):
         app=AppTest.from_file(str(APP)).run()
         self.assertFalse(app.exception)
-        self.assertTrue(any('Login' in str(s.value) for s in app.subheader))
-        self.assertEqual(len(app.form),1)
+        self.assertTrue(any('Smart Energy' in str(t.value) for t in app.title))
+        self.assertEqual(len(app.form), 1)
+        self.assertEqual(len(app.text_input), 2)
+
+    def test_session_restored_from_query_params_on_page_reload(self):
+        app = AppTest.from_file(str(APP)).run()
+        app.text_input[0].set_value('admin')
+        app.text_input[1].set_value('admin123')
+        next(b for b in app.button if b.label == 'Log In').click().run()
+        self.assertFalse(app.exception)
+        sid = app.query_params.get('sid')
+        self.assertTrue(sid)
+        token = app.session_state.get('auth_token')
+        self.assertTrue(token)
+
+        reloaded_app = AppTest.from_file(str(APP))
+        reloaded_app.query_params['sid'] = sid
+        reloaded_app.run()
+        self.assertFalse(reloaded_app.exception)
+        self.assertEqual(reloaded_app.session_state.get('auth_token'), token)
+        self.assertEqual(len(reloaded_app.form), 0)
+        self.assertTrue(any(b.label == 'Log out' for b in reloaded_app.button))
 
     def inventory(self):
         self.buildings=[dict(id=1,name='Renamed building',location='Campus',area_sqm=1000,
@@ -96,7 +123,7 @@ class DashboardTests(TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(self.posts[-1][1]['device_id'],'MAIN-001')
         self.assertFalse(self.posts[-1][1]['is_active'])
-        self.fail=True
+        self.simulate_api_error=True
         app.text_input[0].set_value('MAIN-001')
         next(b for b in app.button if b.label=='Add Meter').click().run()
         self.assertTrue(app.error)
