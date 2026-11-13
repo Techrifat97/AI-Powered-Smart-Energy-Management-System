@@ -1,3 +1,8 @@
+> Historical evidence from 12 November 2026, before the current authentication and Docker revisions.
+> Commands, dataset names, service topology and counts below describe that recorded version.
+> Current setup and test results are maintained in the [README](../../README.md) and
+> [submission review](../submission-review.md).
+
 # Kafka/OOP/demo implementation and verification
 
 Verified locally on 12 November 2026, branch `feature/s1-kafka-oop-bootstrap`,
@@ -30,7 +35,7 @@ and Solar profiles override it. `TelemetryGenerator` composes a read-only strate
 registry and dispatches polymorphically. `iter_readings()` yields measurements.
 Frozen `ProfileContext` and `EnergyQuantity` protect values; `__add__` combines kWh
 only and is used to check included submeter energy against gross consumption.
-See the [implemented class diagram](s1-architecture.md).
+See the [implemented class diagram](../subsystems/s1-energy-monitoring.md).
 
 The producer commits a frozen `TelemetryBatch` before publishing to
 `energy.readings.raw`, keyed by building ID. All meter members share ordering.
@@ -40,7 +45,7 @@ offset. Exact replay returns the receipt; conflicting/changed-inventory/overlapp
 batches never overwrite measurements. Permanent invalid events go to an acknowledged
 DLQ before source commit. Database or DLQ failure leaves the source uncommitted.
 This is **at-least-once delivery**, not distributed exactly-once processing.
-[Detailed failure behavior](kafka.md).
+[Detailed failure behavior](../subsystems/s1-energy-monitoring.md#6-internal-architecture-and-data-flow).
 
 ## Executed checks and results
 
@@ -197,7 +202,7 @@ port 8000 serves the upgraded app. The dashboard continues to run on the host.
 ## Start the system
 
 Retain existing private configuration. For a fresh installation follow the
-[secret-generation instructions](docker-development.md#first-setup), then:
+[secret-generation instructions](../../README.md#installation-and-setup), then:
 
 ```sh
 dc() { docker compose --env-file .env.docker -p smart-energy "$@"; }

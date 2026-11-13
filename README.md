@@ -1,212 +1,311 @@
 # AI-Powered Smart Energy Management System
 
-Capstone project · Compact Programming Course (CPC) · FH Dortmund · Group 25
+Capstone project · Compact Programming · FH Dortmund · Group 25
 
-The system stores simulated building-energy readings and exposes Django REST APIs
-for monitoring, energy recommendations and tariff-based cost scenarios. The
-simulator is the intended data source; physical IoT integration is not planned.
-The current application targets local development and university demonstrations.
+Smart Energy helps a building's users inspect electricity use, understand tariff-based
+costs and explore energy-saving actions. It combines energy monitoring, a sustainability
+coach and cost/scenario analysis in a Streamlit dashboard backed by Django REST APIs.
+**Current smart-meter readings are simulated.** The project provides a university
+software demonstration using synthetic interval observations.
 
-## Team
+## Project Overview
 
-| Member | Student ID | Program | Responsibility |
-| --- | --- | --- | --- |
-| Rifat Ali Shaon | 7225871 | MDT | S1 — Energy Monitoring & Data Management |
-| Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability & AI Coach |
-| Marwan Ahmed | 7226233 | MDT | S3 — Cost, Scenarios & Alerts |
+S1 manages inventory and measurement quality. S2 uses complete historical days for
+heuristic forecasts and energy-saving recommendations. S3 prices matched intervals,
+evaluates what-if scenarios and stores alerts and reports. The shared S1 calculations
+keep the measurement rules consistent across these subsystems.
 
-## Implementation status
+## System Architecture
 
-| Area | Implemented | Incomplete or limited |
-| --- | --- | --- |
-| S1 monitoring | Building/meter management, PostgreSQL validation and constraints, interval ingestion, OOP telemetry profiles, Kafka outbox/consumer, automatic demo history, history and summaries | Activation history and reviewed legacy-data repair workflows |
-| S2 coach | Daily heuristic forecasts, illustrative assessment, rule-based recommendations, optional OpenAI integration, request logs and stored feedback | Calibrated prediction uncertainty, measured savings and authenticated feedback ownership |
-| S3 analysis | Validated global tariff (one active), interval import/export cost estimates, what-if scenarios, stored cost reports, rule-based alert detection built from an abstract `AlertRule` class hierarchy (Pandas/NumPy) with resolve/filter, OpenAI plain-language cost explanations with rule-based fallback, automatic complete-day scenario periods and self-explaining dashboard pages | Scheduled alert detection, historical/per-building tariffs, invoices and statistical anomaly detection |
-| Runtime | Docker Compose PostgreSQL, migration/bootstrap jobs, Gunicorn, KRaft Kafka, producer and consumer | Public deployment hardening and operational backup/restore tooling |
-| Accounts | JWT authentication (`/api/auth/token/`), user management API (`/api/accounts/users/`), pre-seeded `admin` account | Per-user granular object-level building ACLs |
-| Frontend | Streamlit dashboard (`frontend/app.py`): JWT login gate, team management, overview, building/meter management, dated scenarios, costs, alerts, reports, forecast, recommendations and feedback | Multi-tenant tenant-isolation styling |
+![System Architecture](docs/images/system-architecture.png)
 
-## Architecture and data flow
+Docker Compose runs PostgreSQL, Django/Gunicorn, Streamlit, a KRaft Kafka broker,
+topic initialization and separate telemetry producer/consumer processes. The backend
+applies migrations and runs demo initialization before serving requests. Domain APIs
+require authentication. Streamlit sends JWT bearer tokens to Django.
 
-The backend uses Django 5.2, Django REST Framework and PostgreSQL exclusively.
-The telemetry producer discovers current inventory each cycle, freezes a durable
-building-minute batch, and publishes it to Kafka. The consumer saves each batch
-atomically through the S1 ingestion service. Management APIs use the inventory service;
-reading history uses the ORM. S1 summaries, S2 and S3 call the **same S1 Python
-aggregation functions inside Django**. S2/S3 do not call the S1 summary HTTP route.
-Forecasts, recommendations and request logs are stored in PostgreSQL.
+The S1 producer persists an outbox batch before Kafka publication. The consumer
+validates and stores a complete building-minute in PostgreSQL. S1 APIs, S2 and S3
+use stored observations through the Django ORM and shared Python aggregation.
+Optional OpenAI calls support coach recommendations and cost explanations.
 
-```mermaid
-flowchart LR
-    Worker[OOP telemetry producer] --> Outbox[(PostgreSQL outbox)]
-    Outbox --> Kafka[Kafka: energy.readings.raw]
-    Kafka --> Consumer[S1 consumer]
-    Consumer --> Ingestion[S1 validated ingestion]
-    Ingestion --> DB[(PostgreSQL)]
-    Clients[REST clients] --> API[Django REST APIs]
-    API --> Inventory[S1 inventory]
-    Inventory --> DB
-    API --> History[S1 reading history]
-    History --> DB
-    API --> Summary[S1 summary]
-    API --> Coach[S2 coach]
-    API --> Analysis[S3 analysis]
-    Summary --> Shared[Shared S1 aggregation]
-    Coach --> Shared
-    Analysis --> Shared
-    Shared --> DB
-    Coach --> DB
+## Main Features
+
+### S1 — Energy Monitoring & Data Management
+
+- Create buildings, assign meters, activate or deactivate devices and inspect history.
+- Generate deterministic minute telemetry with electricity, HVAC, lighting and solar strategies.
+- Validate readings, reject duplicate/conflicting/overlapping data and process Kafka batches atomically.
+- Initialize complete historical demo days and calculate gross consumption, solar and interval grid estimates.
+
+### S2 — Sustainability Analysis & AI Coach
+
+- Calculate and store seven daily heuristic forecasts from complete recent UTC days.
+- Present an illustrative sustainability score, grade and carbon scenario.
+- Generate rule-based or optional OpenAI energy recommendations with provider execution logs.
+- Store authenticated recommendation ratings, acceptance flags and comments.
+
+### S3 — Energy Costs, Scenarios & Alerts
+
+- Manage global tariffs and estimate interval import charges, export credits and net cost.
+- Compare consumption, solar and tariff scenarios over complete periods.
+- Detect four rule-based alert types and track resolution.
+- Generate stored cost reports, export displayed reports as CSV and explain cost figures.
+
+## Technology Stack
+
+| Technology | Role |
+|---|---|
+| Python 3.13 | Supplied Docker runtime and service implementation. |
+| Django 5.2 / Django REST Framework | Models, migrations, validation and JSON APIs. |
+| SimpleJWT / Django authentication | Token issuance, account profiles and authenticated endpoints. |
+| PostgreSQL 18 | Persistent inventory, readings and subsystem records. |
+| Apache Kafka 4.3.2 / Confluent Python client | S1 telemetry transport, replay and dead-letter handling. |
+| Streamlit | Dashboard, forms, session state and navigation. |
+| Pandas / NumPy | Dashboard charts and sampled-power alert rules. |
+| Decimal | Currency arithmetic and cent rounding. |
+| OpenAI Python SDK | Optional recommendation and cost-explanation requests. |
+| Docker Compose / Gunicorn | Local service orchestration and API serving. |
+
+## Subsystem Documentation
+
+Each guide contains ten functional requirements, ten non-functional requirements,
+implemented classes, data flow, APIs, validation, tests and limitations.
+
+| Subsystem | Technical guide | UML PNG |
+|---|---|---|
+| S1 | [Energy monitoring](docs/subsystems/s1-energy-monitoring.md) | [Class diagram](docs/images/s1-class-diagram.png) |
+| S2 | [Sustainability and AI coach](docs/subsystems/s2-sustainability-ai-coach.md) | [Class diagram](docs/images/s2-class-diagram.png) |
+| S3 | [Costs, scenarios and alerts](docs/subsystems/s3-costs-scenarios-alerts.md) | [Class diagram](docs/images/s3-class-diagram.png) |
+
+Current review findings and verification evidence accompany the subsystem guides.
+[Submission review](docs/submission-review.md)
+
+## Installation and Setup
+
+### Prerequisites and configuration
+
+Install Git and Docker Desktop with Docker Compose. Commands below run from the
+repository root in Bash/zsh or Git Bash. The supplied services share a Python image.
+Fresh setup requires available host ports 8000 and 8501 and internet access to pull
+images and install declared dependencies.
+
+```sh
+git clone https://github.com/Techrifat97/AI-Powered-Smart-Energy-Management-System.git
+cd AI-Powered-Smart-Energy-Management-System
+cp -n .env.example .env
 ```
 
-Arrows show service calls and database access. The Streamlit dashboard runs inside Docker on port 8501 and communicates with the backend API.
+PowerShell can create the private file with
+`if (!(Test-Path .env)) { Copy-Item .env.example .env }`.
+Existing installations use their current private `.env` and matching database
+credentials. The tracked example defines the actual variables consumed by Compose.
 
-## Repository structure
+| Variable | Configuration |
+|---|---|
+| `SECRET_KEY`, `DB_PASSWORD` | Set private values before initializing a fresh database. |
+| `DB_NAME`, `DB_USER` | PostgreSQL database and role created on an empty volume. |
+| `DB_HOST`, `DB_PORT` | Host-development connection. Compose sets container values to `db` and `5432`. |
+| `DB_TEST_NAME` | Disposable test database beginning with `test_`, distinct from the application database. |
+| `BACKEND_PORT`, `FRONTEND_PORT` | Published host ports, defaulting to 8000 and 8501. |
+| `DEMO_MODE` | `true` enables demo administrator, dedicated inventory and historical initialization. |
+| `OPENAI_API_KEY`, `OPENAI_MODEL` | Optional AI configuration. An empty key selects rule-based behavior. |
 
-```text
-.
-├── Dockerfile, compose.yaml, .dockerignore
-├── .env.example                  # Environment configuration template
-├── requirements.txt
-├── backend/
-│   ├── config/                   # Settings, routes and WSGI/ASGI entry points
-│   ├── monitoring/
-│   │   ├── models.py, serializers.py, views.py, urls.py
-│   │   ├── services/             # Inventory, ingestion, profiles, Kafka, demo, aggregation
-│   │   └── management/commands/  # run_telemetry, consume_telemetry, bootstrap_demo
-│   ├── coach/                    # Forecasting, recommendations, assessment
-│   ├── analysis/                 # Tariffs, costs, scenarios, reports, alert detection
-│   └── accounts/                 # Scaffold
-├── frontend/                     # Streamlit dashboard (see frontend/README.md)
-└── docs/                         # Setup, API and measurement documentation
-    ├── uml/                      # S1 and S3 class diagrams (Mermaid)
-    └── presentations/            # Placeholder
+The Compose file fixes the internal broker address, consumer group and frontend API
+address. Some corresponding host-development variables in `.env.example` are
+therefore overridden inside containers. Runtime settings load optional host `.env`
+files with process variables taking precedence. Keep private files outside Git.
+
+### Build and start
+
+```sh
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps -a
+docker compose logs --tail 30 backend telemetry consumer
 ```
 
-## Docker quickstart
+PostgreSQL starts using `postgres_data`. Backend startup runs `migrate --noinput`,
+then `bootstrap_demo`, then Gunicorn. Kafka initializes KRaft storage in `kafka_data`.
+`kafka_init` creates `energy.readings.raw` and `energy.readings.dead-letter` and
+should exit with code 0. Producer and consumer wait for backend health and topic
+initialization. The frontend waits for backend health.
 
-Works on Windows (PowerShell), macOS, and Linux from the repository root.
+The existing setup has seven services. PostgreSQL, Kafka and backend have health
+checks. Frontend and telemetry workers show running status. The public health
+response checks HTTP responsiveness. Application/database failures require further
+inspection of domain requests and service logs.
 
-1. Create your local environment file:
+Open the dashboard at http://localhost:8501 and the API health route at
+http://localhost:8000/api/health/. Individual protected API endpoints are listed in
+the subsystem guides. `/api/` itself has no index route.
 
-   ```sh
-   cp .env.example .env
-   ```
+On a fresh demo, log in with username **admin** and password **admin123**. These
+public evaluator credentials are hardcoded development defaults. An existing admin
+uses its stored password. Demo initialization preserves that account. For a fresh
+non-demo installation, an administrator can run
+`docker compose exec backend python backend/manage.py createsuperuser`.
 
-2. Build and start all services in the background:
+### Restart, stop and persistence
 
-   ```sh
-   docker compose up -d --build
-   ```
+```sh
+docker compose stop
+docker compose up -d
+docker compose down
+```
 
-3. Verify running containers:
+Ordinary `down` retains the named database and Kafka volumes. The `-v` option deletes
+those persistent volumes and should be reserved for an explicitly approved data reset.
+Changing initialization passwords in `.env` does not rotate existing database
+credentials. Private configuration must match the volume's established role.
 
-   ```sh
-   docker compose ps
-   ```
+After source changes, rebuild with `docker compose up -d --build`. The Docker image
+copies application code at build time. Compose publishes backend/frontend ports on
+all host interfaces by default. Review access before using a shared network.
 
-   All services (`db`, `backend`, `frontend`, `kafka`, `telemetry`, `consumer`) will show as healthy/running.
-   With `DEMO_MODE=true` (default), the database is automatically seeded with 14 complete days of historical readings.
+### Optional host development
 
-4. Open the applications:
-   - **Streamlit Dashboard**: [http://localhost:8501](http://localhost:8501)
-     - Default credentials: `admin` / `admin123`
-   - **Backend API**: [http://localhost:8000/api/](http://localhost:8000/api/)
-   - **Public Health Check**: [http://localhost:8000/api/health/](http://localhost:8000/api/health/)
+A host virtual environment can run the same code with a separately configured
+PostgreSQL database. Install `requirements.txt`, configure the root `.env`, inspect
+`python backend/manage.py migrate --plan`, then apply migrations to the intended
+development database and run Django. A role with `CREATEDB` supports disposable tests.
+The explicit `run_telemetry --mode direct` command writes through ingestion. Select
+one telemetry pipeline for each database. The frontend can run separately with
+`streamlit run frontend/app.py` and a suitable `SMART_ENERGY_API`.
 
-5. Stop all services:
+## Application Usage
 
-   ```sh
-   docker compose down
-   ```
+1. Log in and select a building in the sidebar. Labels include IDs so duplicate
+   names remain distinguishable. Log out from the sidebar after the demonstration.
+2. Open Overview for gross consumption, solar, estimated cost, open alerts and charts.
+3. Use Building Management to create metadata, then Meter Management to add a main
+   meter and any required solar meter. A new building begins without historical data.
+4. Activate eligible meters and wait through two UTC minute boundaries. Deactivation
+   preserves history. Required-meter deactivation asks for confirmation and pauses
+   whole-building telemetry.
+5. Open Forecast for seven predicted daily values. Generate Recommendations and
+   expand the sustainability assessment. Saved tips accept ratings and comments.
+6. On Costs, inspect the active tariff and charge/credit breakdown. Explain my costs
+   uses OpenAI when configured and falls back to template text.
+7. Open Scenarios, shown as “What if...?”, and choose an idea. Calculations update as
+   controls change. More options accepts inclusive UTC dates. The default uses the
+   latest contiguous complete days when available.
+8. On Alerts, press Check for new alerts and resolve reviewed findings. Detection is
+   user-triggered. Reports stores calculations for covered UTC dates and offers CSV.
+9. Team Management lists accounts and exposes create/delete actions. Current API
+   permissions allow any authenticated account to manage other ordinary accounts.
 
-## API overview
+The account API exposes the authentication and team-management operations used by
+the dashboard. Access tokens last 24 hours and refresh tokens last seven days.
 
-The `/api/monitoring/`, `/api/coach/` and `/api/analysis/` prefixes also expose their
-subsystems' routes. The table uses the shared `/api/` convenience prefix. All domain endpoints require JWT Bearer authentication (`Authorization: Bearer <token>`).
+| Route | Method | Request / response behavior |
+|---|---|---|
+| `/api/auth/token/` | POST | Username/password produce `access` and `refresh` tokens. |
+| `/api/auth/token/refresh/` | POST | A refresh token produces an access token. |
+| `/api/accounts/me/` | GET | Return the authenticated user's profile. |
+| `/api/accounts/users/` | GET, POST | List or create accounts for authenticated callers. |
+| `/api/accounts/users/{id}/` | GET, DELETE | Retrieve or remove another ordinary account, subject to self/admin guards. |
 
-| Subsystem | Route | Methods | Purpose |
-| --- | --- | --- | --- |
-| Core | `/api/health/` | GET | Public container health probe (`AllowAny`) |
-| Auth | `/api/auth/token/` | POST | Obtain 24-hour SimpleJWT access/refresh tokens |
-| Accounts | `/api/accounts/users/`, `/api/accounts/users/{id}/` | GET, POST; GET, DELETE | List, create, or remove user accounts |
-| Accounts | `/api/accounts/me/` | GET | Retrieve authenticated profile |
-| S1 | `/api/buildings/` | GET, POST | List/create buildings |
-| S1 | `/api/buildings/{id}/` | GET, PUT, PATCH | Retrieve/update building details |
-| S1 | `/api/buildings/{id}/meters/` | GET, POST | List/create assigned meters |
-| S1 | `/api/meters/{id}/` | GET, PATCH | Retrieve meter or change active status |
-| S1 | `/api/buildings/{id}/readings/` | GET | Paginated, filtered history |
-| S1 | `/api/buildings/{id}/summary/` | GET | All-history energy summary |
-| S2 | `/api/buildings/{id}/forecast/` | GET, POST | Calculate and store a seven-day daily heuristic forecast |
-| S2 | `/api/recommendations/generate/` | POST | Generate/store recommendations when observations suffice |
-| S2 | `/api/recommendations/` | GET | List stored recommendations |
-| S2 | `/api/recommendations/{id}/feedback/` | POST | Store validated feedback (`1–5` rating) for `{id}` |
-| S3 | `/api/tariffs/`, `/api/tariffs/{id}/` | GET, POST; GET, PUT, PATCH | List/create/update validated tariff plans (one active) |
-| S3 | `/api/buildings/{id}/cost/` | GET | Interval-based tariff scenario |
-| S3 | `/api/buildings/{id}/cost/explain/` | POST | Plain-language cost explanation (OpenAI, rule-based fallback) |
-| S3 | `/api/buildings/{id}/scenarios/` | POST | What-if re-pricing (tariff, consumption, solar) |
-| S3 | `/api/buildings/{id}/reports/`, `/api/reports/` | GET, POST; GET | Generate and list stored cost reports |
-| S3 | `/api/alerts/`, `/api/alerts/detect/`, `/api/alerts/{id}/` | GET; POST; GET, PUT, PATCH | List, detect and resolve alerts (only `is_resolved` is writable) |
+API clients send the access token as `Authorization: Bearer <token>`. Django session
+authentication is also configured. The current frontend uses the access token and
+returns to login after a domain 401.
 
-Forecasting requires at least two complete UTC days in the preceding 14 completed
-calendar days. Fresh automatic demo history meets this requirement; new user buildings need history first. Cost
-estimates require matched intervals and exactly one applicable active global
-tariff. OpenAI is optional; unset `OPENAI_API_KEY` for the rule-based demonstration. See the
-[S1 API contract](docs/s1-management-api.md) and
-[S2/S3 API guide](docs/coach-analysis-api.md) for request examples and prerequisites.
+## Demo Dataset
+
+Fresh demo setup creates **Campus Sonnenstraße Dortmund**, with four reserved meters
+`DO-SON-MAIN`, `DO-SON-HVAC`, `DO-SON-LIGHTING` and `DO-SON-SOLAR`. It creates 1,344
+hourly readings across 14 complete previous UTC days. Main and solar intervals
+match, including recorded night solar zeros. A flat import tariff and feed-in rate
+are supplied when initial setup finds no active plan.
+
+Live telemetry then generates completed 60-second intervals. Stored hourly durations
+remain 3600 seconds. HVAC and lighting are included in the main gross load. Solar
+records generation separately. Demo readings are reproducible synthetic profiles.
+
+Stable dataset identity and reserved device IDs protect repeat initialization and
+renamed inventory. Existing populated dedicated inventory is adopted without filling
+gaps. Explicit demo-only `bootstrap_demo --refresh` fills wholly empty recent days
+and skips partial or unresolved coverage. Normal startup never backfills downtime.
+The legacy `seed_demo_data` command remains preserved for coursework fixtures.
+
+## Screenshots
+
+The review environment's browser capture host was unavailable. The repository includes
+source-derived architecture and UML PNGs. The running dashboard can be inspected at
+localhost:8501, and its existing interaction suite exercises pages using mocked HTTP.
 
 ## Testing
 
-Use a **separate disposable PostgreSQL test database**, never an application
-or demonstration database. The [testing guide](docs/testing.md) provides Docker,
-working-tree and host commands with external AI calls disabled.
+Run against a distinct disposable PostgreSQL database. The following commands use
+the running backend container's established connection settings and application image.
+Choose a different test name for concurrent test sessions.
 
-Tests cover validation, database constraints, interval calculations, management
-and history APIs, selected PostgreSQL concurrency cases, generator scheduling,
-legacy migration behavior, demo setup and graceful shutdown. They do not establish
-forecast accuracy, real-world energy savings, load capacity or public-deployment
-security. The OpenAI integration is mocked during tests. Test count alone is not
-an assessment of capstone completeness.
+```sh
+docker compose exec -T -e DB_TEST_NAME=test_submission_checks -e OPENAI_API_KEY= \
+  backend python backend/manage.py test config accounts monitoring coach analysis --noinput
+docker compose exec -T -e OPENAI_API_KEY= \
+  backend python -m unittest discover -s frontend -p 'test_*.py'
+docker compose exec -T backend python backend/manage.py check --database default
+docker compose exec -T backend python backend/manage.py makemigrations --check --dry-run
+git diff --check
+```
 
-## Measurement assumptions and limitations
+The submission review on 13 November 2026 ran all 255 existing backend tests on
+disposable PostgreSQL and all 22 frontend tests with mocked HTTP. Both suites passed.
+Five additional temporary diagnostic probes confirmed documented defects. External
+OpenAI requests were mocked or disabled. Test counts and earlier results are recorded
+with their scope. [Current review and verification](docs/submission-review.md)
 
-- `energy_kwh` is energy for an explicitly defined interval. Telemetry uses
-  60-second UTC intervals; hourly demo data remains hourly and legacy unknown
-  durations remain unknown.
-- Main `ELECTRICITY` is gross building load. HVAC and lighting are included
-  submeters; solar is separate generation. Deactivation preserves readings.
-- Zero is an observation, not missing data. Missing/ambiguous coverage can return
-  `null`; baseline values are references, not replacements for observations.
-- The no-battery model estimates import/export separately per matching interval.
-  `net_grid_consumption_kwh` is a signed recorded balance, not measured grid flow.
-- Forecast bands and recommendation scores are illustrative. Cost estimates are
-  scenarios, not complete utility bills; fixed fees, taxes and contract history
-  are not modeled.
-- Domain API endpoints enforce JWT authentication (`IsAuthenticated`); health checks use `/api/health/` (`AllowAny`).
-- The Streamlit dashboard enforces user session authentication, attaching JWT Bearer tokens to all backend requests. Granular object-level building permissions are not modeled.
+## Project Structure
 
-## Documentation
+```text
+.
+├── README.md
+├── compose.yaml, Dockerfile, requirements.txt, .env.example
+├── .streamlit/                  # Dashboard theme
+├── backend/
+│   ├── config/                  # Django settings and shared routes
+│   ├── accounts/                # JWT-linked user management
+│   ├── monitoring/              # S1 models, services, commands, APIs and tests
+│   ├── coach/                   # S2 forecasts, assessment, recommendations
+│   └── analysis/                # S3 costs, rules, scenarios and reports
+├── frontend/                    # Streamlit application, assets and tests
+├── scripts/                     # Historical isolated acceptance script
+└── docs/
+    ├── subsystems/              # Three primary technical guides
+    ├── images/                  # Four architecture/UML PNGs
+    ├── test-results/            # Dated test evidence
+    └── submission-review.md     # Findings and current verification
+```
 
-| Guide | Scope |
-| --- | --- |
-| [S1 architecture and UML](docs/s1-architecture.md) | OOP classes and responsibilities |
-| [S3 architecture and UML](docs/s3-architecture.md) | Alert rules, cost explainer (OpenAI), scenarios, exceptions and API |
-| [S3 requirements](docs/s3-requirements.md) | 10 functional and 10 non-functional requirements |
-| [S3 test results](docs/test-results/s3-test-results.md) | Latest S3 backend and dashboard test run |
-| [Kafka pipeline](docs/kafka.md) | Delivery, outbox, consumer, failures and recovery |
-| [Docker development](docs/docker-development.md) | Private configuration, services, demo setup, logs and persistence |
-| [Host development](docs/host-development.md) | Optional virtual environment and host PostgreSQL setup |
-| [Testing](docs/testing.md) | Isolated databases, commands and coverage limits |
-| [S1 management APIs](docs/s1-management-api.md) | Dashboard-facing routes, validation and history filters |
-| [S2/S3 APIs](docs/coach-analysis-api.md) | Forecast/recommendation behavior and tariff prerequisites |
-| [Energy calculations](docs/energy-calculations.md) | Shared measurement policy, unavailable values and cost semantics |
-| [Reading ingestion](docs/reading-ingestion.md) | Single-reading validation, retries and transactions |
-| [Simulated telemetry](docs/simulated-telemetry.md) | Inventory rules, synthetic profile and scheduling |
+## Team Members and Contributions
 
-## Demo video and presentation
+| Member | Student ID | Program | Responsibility |
+|---|---|---|---|
+| Rifat Ali Shaon | 7225871 | MDT | S1 — Energy Monitoring & Data Management |
+| Syed Yasoob Raza | 7226703 | ESE | S2 — Sustainability Analysis & AI Coach |
+| Marwan Ahmed | 7226233 | MDT | S3 — Energy Costs, Scenarios & Alerts |
 
-- Capstone screencast (7 min): **TODO: paste the link here before submitting**
-- Final presentation: `docs/presentations/` (TODO: add the file)
-- Earlier coursework: [Assignment 3 API demonstration video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
-  (historical, not the current capstone demo)
+The repository retains the earlier Assignment 3 demonstration video. The current
+capstone screencast link and final presentation file remain submission items for
+the team to supply. The presentations directory is currently a placeholder.
+[Earlier coursework video](https://drive.google.com/file/d/1buvqB7mQ5Sy1reJsuSwuxF97OFEm9avi/view?usp=sharing)
 
-[Project repository](https://github.com/Techrifat97/AI-Powered-Smart-Energy-Management-System).
+## Limitations
+
+The current Streamlit authentication cache can share a logged-in session across
+browser sessions. Account APIs grant broad authenticated access, and building
+ownership is unmodeled. Demo credentials are public, CORS permits all origins, and
+HTTP services bind to all host interfaces in Compose. The review records these
+security findings alongside confirmed validation defects.
+
+Forecast bands and sustainability scores are heuristic. Carbon uses a fixed factor.
+Pricing uses one global tariff and a no-battery interval estimate. Taxes, fixed fees
+and contract history are unmodeled. Dashboard daily charts and cost-explanation
+wording have identified accuracy limitations. Recommendation feedback is stored
+without a learning pipeline.
+
+Kafka has one broker. Outbox archival, automated legacy repair, activation history
+and measured capacity targets remain future work. The historical acceptance script
+requires authentication changes before it can verify the current protected APIs.
+[Complete review findings](docs/submission-review.md)
