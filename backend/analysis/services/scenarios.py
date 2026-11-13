@@ -36,18 +36,43 @@ def _price(intervals, tariff, consumption_factor, solar_factor):
             'export_credit_eur': _money(exports), 'net_cost_eur': _money(imports - exports)}
 
 
+def latest_complete_period(building):
+    """Return (first, last) of the most recent unbroken run of fully recorded UTC days, or None.
+
+    Live telemetry usually leaves today incomplete and restarts leave gaps, so pricing
+    "all recorded data" would almost always be refused. The newest gap-free run of
+    complete days is the most useful default period.
+    """
+    days = sorted(d['date'] for d in building_energy_report(building)['complete_days'])
+    if not days:
+        return None
+    first = last = days[-1]
+    for day in reversed(days[:-1]):
+        if day != first - timedelta(days=1):
+            break
+        first = day
+    return first, last
+
+
 def run_scenario(building, *, tariff=None, consumption_change_pct=0.0, solar_change_pct=0.0,
                  period_start=None, period_end=None):
     """Compare the active tariff on recorded data with a modified scenario.
 
     `tariff` is an unsaved TariffPlan-like object (None keeps the active tariff).
     Percentages are signed changes, e.g. -10 reduces consumption by 10 %.
-    Optional dates select inclusive UTC days for BOTH prices; omitted dates retain
-    the recorded-history behavior. Incomplete or mismatched coverage stays unavailable.
+    Optional dates select inclusive UTC days for BOTH prices. Without dates the latest
+    unbroken run of complete UTC days is used (`period_auto`); with no complete day yet,
+    all recorded history is used. Incomplete or mismatched coverage stays unavailable.
     """
     if (period_start is None) != (period_end is None):
         raise ValidationError('Provide period_start and period_end together.')
     bounds = {}
+    period_auto = False
+    if period_start is None:
+        latest = latest_complete_period(building)
+        if latest:
+            period_start, period_end = latest
+            period_auto = True
     if period_start is not None:
         if period_start > period_end:
             raise ValidationError('Start date must not be after end date.')
@@ -66,7 +91,8 @@ def run_scenario(building, *, tariff=None, consumption_change_pct=0.0, solar_cha
               'available': False, 'reason': None, 'baseline': None, 'scenario': None,
               'difference_net_cost_eur': None}
     if period_start is not None:
-        result.update(period_start=period_start.isoformat(), period_end=period_end.isoformat())
+        result.update(period_start=period_start.isoformat(), period_end=period_end.isoformat(),
+                      period_auto=period_auto)
     if len(active) != 1:
         result['reason'] = 'missing_active_tariff' if not active else 'ambiguous_active_tariffs'
         return result

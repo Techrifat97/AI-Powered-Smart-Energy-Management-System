@@ -30,10 +30,13 @@ class ScenarioPeriodTests(TestCase):
         self.assertTrue(response.data['available'])
         self.assertEqual(response.data['period_start'],self.body['period_start'])
         self.assertEqual(response.data['baseline'],response.data['scenario'])
-        original=self.client.post(self.url,{},format='json')
-        self.assertFalse(original.data['available'])
-        self.assertEqual(original.data['reason'],'coverage_incomplete')
-        self.assertNotIn('period_start',original.data)
+        # Without dates the latest complete days are chosen automatically, so the live gap
+        # no longer makes the default scenario unavailable.
+        automatic=self.client.post(self.url,{},format='json')
+        self.assertTrue(automatic.data['available'])
+        self.assertTrue(automatic.data['period_auto'])
+        self.assertEqual(automatic.data['period_start'],self.body['period_start'])
+        self.assertEqual(automatic.data['period_end'],self.body['period_end'])
 
     def test_same_period_used_for_modified_price(self):
         body=dict(self.body,consumption_change_pct=-100,solar_change_pct=-100)
