@@ -180,15 +180,4 @@ explanation source and alert resolution. The preserved S3 report records an earl
 41-backend/22-dashboard run. The root README provides the full-suite test commands.
 [S3 test results](../test-results/s3-test-results.md)
 
-## 9. Technical Limitations
 
-Pricing applies one global tariff across history. Per-building contracts, historical
-rates, taxes, fees and batteries have no implementation. Export/import values are
-interval estimates. Alert detection has no background schedule, uses sample-weighted
-power means and performs sequential deduplication. Daily averages in cost
-explanations and the UI use the elapsed timestamp span. Cost explanations are
-planning estimates based on recorded observations and the active global tariff.
-
-The primary implementation is in analysis services, models and views.
-[Services](../../backend/analysis/services/), [models](../../backend/analysis/models.py),
-[views](../../backend/analysis/views.py)

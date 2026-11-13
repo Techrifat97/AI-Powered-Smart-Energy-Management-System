@@ -237,17 +237,3 @@ applying migrations to an intended development database. The Docker PostgreSQL
 volume and a host PostgreSQL server have independent data. Settings load the root
 and optional backend `.env` with existing process variables taking precedence.
 
-## 9. Technical Limitations
-
-History scans grow with dataset size. Outbox archival and automated rejected-batch
-repair are absent. Kafka uses one broker. Activation and installation timelines
-are unmodeled. Legacy unknown durations can block ingestion and later summaries.
-Supported service locks coordinate cooperating writers. Raw ORM/SQL and admin
-writes can bypass inventory or overlap policies. Authentication grants shared
-building access. The public health response checks HTTP responsiveness.
-
-The primary implementation is in the monitoring models, write services and shared
-calculations.
-[Models](../../backend/monitoring/models.py), [profiles](../../backend/monitoring/services/profiles.py),
-[ingestion](../../backend/monitoring/services/ingestion.py), [inventory](../../backend/monitoring/services/inventory.py),
-[aggregation](../../backend/monitoring/services/aggregation.py), [Kafka pipeline](../../backend/monitoring/services/kafka_pipeline.py)

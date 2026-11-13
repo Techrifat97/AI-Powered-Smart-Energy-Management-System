@@ -151,18 +151,4 @@ request. `monitoring/test_bootstrap_profiles.py` verifies fresh-history readines
 without an AI key. `accounts/tests.py` checks authenticated feedback attribution.
 Frontend AppTest covers navigation and session behavior with mocked HTTP calls.
 
-## 9. Technical Limitations
 
-Forecast factors, bands, scores and carbon assumptions have no calibration study.
-Stored forecasts are recalculated by their GET endpoint. Each successful
-recommendation request stores a new set of actions. Coach request timeout/retry
-behavior follows SDK defaults. Feedback is stored without a learning pipeline or
-measurement of realized savings. Building access is shared among authenticated users.
-Provider execution logs retain error text.
-
-The service implementations and models provide the primary code references.
-[Forecaster](../../backend/coach/services/forecaster.py),
-[scorer](../../backend/coach/services/scorer.py),
-[coach providers](../../backend/coach/services/llm_coach.py),
-[models](../../backend/coach/models.py),
-[API views](../../backend/coach/views.py)
