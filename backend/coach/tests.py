@@ -108,11 +108,17 @@ class CoachAPITests(TestCase):
             rec.id,
         )
 
+        duplicate_by_same_user = self.client.post(
+            url, {'rating': 5, 'comment': 'Second try'}, format='json'
+        )
+        self.assertEqual(duplicate_by_same_user.status_code, status.HTTP_400_BAD_REQUEST)
+
+        other_url = reverse('recommendation-feedback', kwargs={'pk': other_rec.id})
         with_matching_id = self.client.post(
-            url, {'recommendation': rec.id, 'rating': 5}, format='json'
+            other_url, {'recommendation': other_rec.id, 'rating': 5}, format='json'
         )
         self.assertEqual(with_matching_id.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(with_matching_id.data['recommendation'], rec.id)
+        self.assertEqual(with_matching_id.data['recommendation'], other_rec.id)
 
         mismatched = self.client.post(
             url, {'recommendation': other_rec.id, 'rating': 5}, format='json'
@@ -134,8 +140,10 @@ class CoachAPITests(TestCase):
 
         for valid_rating in (1, 5):
             with self.subTest(valid_rating=valid_rating):
+                RecommendationFeedback.objects.filter(recommendation=rec).delete()
                 resp = self.client.post(url, {'rating': valid_rating}, format='json')
                 self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        RecommendationFeedback.objects.filter(recommendation=rec).delete()
 
         for invalid_rating in (-1, 0, 6):
             with self.subTest(invalid_rating=invalid_rating):
@@ -152,3 +160,26 @@ class CoachAPITests(TestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get(reverse('recommendation-list'))
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_recommendation_includes_multiple_user_feedbacks(self):
+        User = get_user_model()
+        second_user = User.objects.create_user(username='teammate_2', password='password123')
+        rec = AIRecommendation.objects.create(
+            building=self.building, title="Night HVAC Setback", suggested_action="Lower night setpoint by 2C"
+        )
+        fb_url = reverse('recommendation-feedback', kwargs={'pk': rec.id})
+
+        self.client.post(fb_url, {'rating': 5, 'is_accepted': True, 'comment': 'Works well in winter'}, format='json')
+        self.client.force_authenticate(user=second_user)
+        self.client.post(fb_url, {'rating': 3, 'is_accepted': False, 'comment': 'Need lab schedule check'}, format='json')
+
+        list_resp = self.client.get(reverse('recommendation-list'), {'building_id': self.building.id})
+        self.assertEqual(list_resp.status_code, status.HTTP_200_OK)
+        feedbacks = list_resp.data['results'][0]['feedback']
+        self.assertEqual(len(feedbacks), 2)
+        self.assertEqual(feedbacks[0]['user_username'], 'teammate_2')
+        self.assertEqual(feedbacks[0]['rating'], 3)
+        self.assertEqual(feedbacks[0]['comment'], 'Need lab schedule check')
+        self.assertEqual(feedbacks[1]['user_username'], 'coach_testuser')
+        self.assertEqual(feedbacks[1]['rating'], 5)
+        self.assertEqual(feedbacks[1]['comment'], 'Works well in winter')

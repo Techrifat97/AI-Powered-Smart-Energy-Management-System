@@ -1050,6 +1050,8 @@ def recommendations():
     if not rows:
         st.info("No tips yet. Press **Generate recommendations** above once the building has a few full days "
                 "of measurements.", icon=":material/lightbulb:")
+    current_user = st.session_state.get("auth_user") or {}
+    current_username = current_user.get("username") if isinstance(current_user, dict) else None
     for rec in rows:
         with st.container(border=True):
             st.markdown(f"**{rec['title']}**  \n{rec['category_display']} | priority "
@@ -1057,15 +1059,44 @@ def recommendations():
             st.write(rec["suggested_action"])
             st.caption(f"Estimated saving: {rec['estimated_savings_kwh']} kWh | "
                        f"confidence: {rec['confidence_score']}")
-            with st.form(f"feedback{rec['id']}"):
-                rating = st.slider("How useful was this tip? (1 = not, 5 = very)", 1, 5, 5, key=f"rate{rec['id']}")
-                accepted = st.checkbox("I will follow this tip", True, key=f"acc{rec['id']}")
-                comment = st.text_input("Comment (optional)", key=f"com{rec['id']}")
-                if st.form_submit_button("Send feedback"):
-                    _, err = call("POST", f"/recommendations/{rec['id']}/feedback/",
-                                  json={"rating": rating, "is_accepted": accepted, "comment": comment})
-                    if not show(err):
-                        st.success("Feedback stored.")
+            feedback_rows = rec.get("feedback") or []
+            if feedback_rows:
+                avg_rating = sum(int(f.get("rating", 0)) for f in feedback_rows) / len(feedback_rows)
+                st.markdown(f"**Team feedback ({len(feedback_rows)} — avg {avg_rating:.1f}/5 ★)**")
+                for fb in feedback_rows:
+                    author = fb.get("user_username") or "Anonymous"
+                    rating_val = int(fb.get("rating", 0))
+                    stars = "★" * rating_val + "☆" * (5 - rating_val)
+                    decision = "Will follow" if fb.get("is_accepted") else "Not following"
+                    created = str(fb.get("created_at", ""))[:16].replace("T", " ")
+                    with st.container(border=True):
+                        st.markdown(f"**:bust_in_silhouette: {author}** · {stars} (`{rating_val}/5`) · *{decision}*")
+                        if fb.get("comment"):
+                            st.write(fb["comment"])
+                        else:
+                            st.caption("*No comment added.*")
+                        if created:
+                            st.caption(f"Submitted {created} UTC")
+            else:
+                st.caption("No feedback submitted for this tip yet.")
+            if st.session_state.pop(f"fb_saved_{rec['id']}", False):
+                st.success("Feedback stored.")
+            already_submitted = bool(current_username) and any(
+                fb.get("user_username") == current_username for fb in feedback_rows
+            )
+            if already_submitted:
+                st.caption(f"✓ You ({current_username}) have already submitted feedback for this recommendation.")
+            else:
+                with st.form(f"feedback{rec['id']}"):
+                    rating = st.slider("How useful was this tip? (1 = not, 5 = very)", 1, 5, 5, key=f"rate{rec['id']}")
+                    accepted = st.checkbox("I will follow this tip", True, key=f"acc{rec['id']}")
+                    comment = st.text_input("Comment (optional)", key=f"com{rec['id']}")
+                    if st.form_submit_button("Send feedback"):
+                        _, err = call("POST", f"/recommendations/{rec['id']}/feedback/",
+                                      json={"rating": rating, "is_accepted": accepted, "comment": comment})
+                        if not show(err):
+                            st.session_state[f"fb_saved_{rec['id']}"] = True
+                            st.rerun()
 
 
 # --- navigation & routing --------------------------------------------------
