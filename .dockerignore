@@ -27,6 +27,5 @@ dist
 build
 .DS_Store
 docs
-frontend
 *.zip
 *.tar*
