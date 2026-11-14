@@ -23,7 +23,7 @@ class PostgreSQLSettingsTests(SimpleTestCase):
     def load_settings(self, environment):
         # Ignore developers' local .env files and never print their credentials.
         with patch.dict(os.environ, environment, clear=True), patch('dotenv.load_dotenv'):
-            return runpy.run_path(str(Path(__file__).with_name('settings.py')))
+            return runpy.run_path(str(Path(__file__).resolve().parents[1] / 'settings.py'))
 
     def test_database_backend_is_always_postgresql(self):
         values = self.load_settings(self.database_env)
