@@ -25,7 +25,7 @@ shared account application supplies authenticated users for feedback.
 | S2-FR-07 | The service shall attempt OpenAI recommendations for a configured eligible key and use rule-based results when no usable result is obtained during provider invocation. | `SustainabilityCoachService.generate_recommendations()` | `EnergyIntegrationTests.test_live_provider_payload_is_serializable_but_external_call_is_mocked` and no-key API tests. |
 | S2-FR-08 | Successful generation shall store recommendations and provider token, latency and status information. | `AIRecommendation`, `LLMRequestLog` | `CoachAPITests.test_recommendation_generate_endpoint` |
 | S2-FR-09 | The API shall list stored recommendations with an optional building filter. | `RecommendationListView.get_queryset()` | `CoachAPITests.test_recommendation_list_and_building_filter` |
-| S2-FR-10 | Feedback shall bind a 1–5 rating, acceptance flag and optional comment to the URL recommendation and authenticated user. | `RecommendationFeedbackSerializer`, `RecommendationFeedbackCreateView` | Feedback tests in `coach/tests.py` and `AccountsApiTests.test_authenticated_recommendation_feedback_binds_to_user` |
+| S2-FR-10 | Feedback shall bind a 1–5 rating, acceptance flag and optional comment to the URL recommendation and authenticated user. | `RecommendationFeedbackSerializer`, `RecommendationFeedbackCreateView` | Feedback tests in `coach/tests/test_coach.py` and `AccountsApiTests.test_authenticated_recommendation_feedback_binds_to_user` |
 
 ## 3. Non-Functional Requirements
 
@@ -38,7 +38,7 @@ shared account application supplies authenticated users for feedback.
 | S2-NFR-05 | Offline operation shall support recommendation generation with an empty OpenAI key. | `RuleBasedCoachProvider` and `BootstrapTests.test_s2_and_s3_ready_without_openai`. |
 | S2-NFR-06 | Assessment explanations shall identify forecast bands, scores and the carbon factor as heuristic assumptions. | Model help text, forecaster availability metadata and scorer factor `0.385 kg/kWh`. Calibration has no verification evidence. |
 | S2-NFR-07 | Currency consistency shall leave recommendation savings in EUR unavailable without a priced action scenario. | Service assigns `estimated_savings_eur=None`. Integration tests cover provider-supplied monetary guesses. |
-| S2-NFR-08 | Test isolation shall allow external-provider responses to be mocked and database writes to use disposable PostgreSQL. | `coach/tests.py`, `test_energy_integration.py` and settings guards. |
+| S2-NFR-08 | Test isolation shall allow external-provider responses to be mocked and database writes to use disposable PostgreSQL. | `coach/tests/test_coach.py`, `monitoring/tests/test_energy_integration.py` and settings guards. |
 | S2-NFR-09 | Maintainability shall separate forecasting, scoring and provider orchestration. | `forecaster.py`, `scorer.py`, `llm_coach.py`. Each has a distinct class responsibility. |
 | S2-NFR-10 | Provider observability shall record token usage, latency and execution status for recommendation generation. | `LLMRequestLog`, engine telemetry response fields and `CoachAPITests.test_recommendation_generate_endpoint`. |
 
@@ -143,12 +143,12 @@ ratings 1–5. The serializer checks URL/body identity and the view attributes t
 current user. Model field validators require `full_clean()` on direct ORM writes.
 Feedback rating storage has no additional database range constraint.
 
-`coach/tests.py` covers forecast availability, generation, stored recommendation
+`coach/tests/test_coach.py` covers forecast availability, generation, stored recommendation
 filters, invalid building filters, feedback binding/range and unauthenticated access.
-`monitoring/test_energy_integration.py` checks main-only energy, complete zero days,
+`monitoring/tests/test_energy_integration.py` checks main-only energy, complete zero days,
 unknown duration, partial data, solar matching, scorer inputs and a mocked OpenAI
-request. `monitoring/test_bootstrap_profiles.py` verifies fresh-history readiness
-without an AI key. `accounts/tests.py` checks authenticated feedback attribution.
+request. `monitoring/tests/test_bootstrap_profiles.py` verifies fresh-history readiness
+without an AI key. `accounts/tests/test_accounts.py` checks authenticated feedback attribution.
 Frontend AppTest covers navigation and session behavior with mocked HTTP calls.
 
 

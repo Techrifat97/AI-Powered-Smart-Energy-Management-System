@@ -170,11 +170,11 @@ percentages, paired ordered dates and a representable next day. Report serialize
 validate date parsing, while service ordering/coverage failures use
 `ReportUnavailable`.
 
-`analysis/tests.py` covers tariffs, detection/resolution, report storage and manually
+Tests live in `analysis/tests/`. `test_analysis.py` covers tariffs, detection/resolution, report storage and manually
 verifiable scenario prices. `test_scenario_periods.py` covers explicit and automatic
 periods, live gaps, matching solar and incomplete coverage. `test_explainer.py`
 covers abstract interfaces, injected OpenAI responses, fallback and authentication.
-S1's `test_energy_integration.py` checks shared pricing and measurement semantics.
+S1's `monitoring/tests/test_energy_integration.py` checks shared pricing and measurement semantics.
 Frontend AppTest covers tariff entry/switching, scenario controls, displayed results,
 explanation source and alert resolution. The preserved S3 report records an earlier
 41-backend/22-dashboard run. The root README provides the full-suite test commands.

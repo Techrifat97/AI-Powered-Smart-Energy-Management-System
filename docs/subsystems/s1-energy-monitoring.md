@@ -208,7 +208,7 @@ overlap policies depend on supported write paths. Migration 0002 checks invalid
 legacy values and duplicates before constraints. Migration 0003 preserves unknown
 durations. Migration 0004 adds demo identity and outbox tables.
 
-Tests cover model constraints and migration preservation in `tests.py` and
+Tests live in `monitoring/tests/`. They cover model constraints and migration preservation in `test_monitoring.py` and
 `test_interval_migration.py`, aggregation in `test_aggregation.py`, shared S1/S2/S3
 rules in `test_energy_integration.py`, inventory/history API and PostgreSQL races in
 `test_management_api.py`, strict ingestion in `test_ingestion.py`, profiles/bootstrap
